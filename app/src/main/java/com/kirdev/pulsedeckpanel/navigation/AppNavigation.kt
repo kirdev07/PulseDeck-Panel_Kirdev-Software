@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.kirdev.pulsedeckpanel.PanelApp
+import com.kirdev.pulsedeckpanel.data.update.UpdateState
 import com.kirdev.pulsedeckpanel.data.model.ConnectionState
 import com.kirdev.pulsedeckpanel.feature.connection.ConnectionScreen
 import com.kirdev.pulsedeckpanel.feature.connection.ConnectionViewModel
@@ -36,7 +37,9 @@ fun AppNavigation(app: PanelApp) {
     when (route) {
         Route.Dashboard -> {
             val vm: DashboardViewModel = viewModel(factory = viewModelFactory { initializer { DashboardViewModel(app.connection, app.settings) } })
-            DashboardScreen(vm, onSettings = { route = Route.Settings }, onConnection = { route = Route.Connection })
+            val update by app.updater.state.collectAsStateWithLifecycle()
+            DashboardScreen(vm, onSettings = { route = Route.Settings }, onConnection = { route = Route.Connection },
+                updateAvailable = update is UpdateState.Available)
         }
         Route.Settings -> {
             BackHandler { route = Route.Dashboard }

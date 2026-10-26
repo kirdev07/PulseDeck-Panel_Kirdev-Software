@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +46,7 @@ import com.kirdev.pulsedeckpanel.feature.music.CompactPlayer
 import com.kirdev.pulsedeckpanel.feature.pulse.KiroXMotion
 
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel, onSettings: () -> Unit, onConnection: () -> Unit) {
+fun DashboardScreen(viewModel: DashboardViewModel, onSettings: () -> Unit, onConnection: () -> Unit, updateAvailable: Boolean = false) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val media by viewModel.media.collectAsStateWithLifecycle()
     val cover by viewModel.cover.collectAsStateWithLifecycle()
@@ -69,7 +71,10 @@ fun DashboardScreen(viewModel: DashboardViewModel, onSettings: () -> Unit, onCon
             .padding(horizontal = 28.dp, vertical = 14.dp),
     ) {
         ConnectionBadge(state, onConnection, Modifier.align(Alignment.TopStart).padding(top = 10.dp))
-        IconButtonSmall(PanelIcons.Settings, "Настройки", onClick = onSettings, modifier = Modifier.align(Alignment.TopEnd))
+        Box(Modifier.align(Alignment.TopEnd)) {
+            IconButtonSmall(PanelIcons.Settings, if (updateAvailable) "Настройки, есть обновление" else "Настройки", onClick = onSettings)
+            if (updateAvailable) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(8.dp).clip(CircleShape).background(Palette.Text))
+        }
 
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(6.dp))

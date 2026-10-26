@@ -5,6 +5,7 @@ import com.kirdev.pulsedeckpanel.data.local.AppSettings
 import com.kirdev.pulsedeckpanel.data.local.PairingStore
 import com.kirdev.pulsedeckpanel.data.remote.PairingClient
 import com.kirdev.pulsedeckpanel.data.remote.PanelConnection
+import com.kirdev.pulsedeckpanel.data.update.Updater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,11 +19,15 @@ class PanelApp : Application() {
     lateinit var settings: AppSettings
         private set
     val pairingClient = PairingClient()
+    lateinit var updater: Updater
+        private set
 
     override fun onCreate() {
         super.onCreate()
         pairing = PairingStore(this)
         settings = AppSettings(this)
         connection = PanelConnection(pairing, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        updater = Updater(this, CoroutineScope(SupervisorJob() + Dispatchers.Main))
+        updater.checkAutomatically()
     }
 }

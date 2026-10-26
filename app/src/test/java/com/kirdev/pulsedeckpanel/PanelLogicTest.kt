@@ -151,3 +151,24 @@ class PairingQrTest {
         assertEquals(null, parse(null))
     }
 }
+
+class UpdaterTest {
+    private val updater = com.kirdev.pulsedeckpanel.data.update.Updater
+
+    @Test fun versionsCompareByNumbers() {
+        assertTrue(updater.isNewer("1.0.1", "1.0"))
+        assertTrue(updater.isNewer("1.0.10", "1.0.9"))
+        assertFalse(updater.isNewer("1.0", "1.0.0"))
+        assertFalse(updater.isNewer("1.0", "1.1"))
+    }
+
+    @Test fun releaseNeedsAnApk() {
+        val withApk = """{"tag_name":"v1.0.1","body":"Fixes","assets":[{"name":"PulseDeck-Panel-1.0.1.apk",
+            "browser_download_url":"https://example/x.apk","size":10}]}"""
+        val release = updater.parse(withApk)!!
+        assertEquals("1.0.1", release.version)
+        assertEquals("https://example/x.apk", release.apkUrl)
+        assertNull(updater.parse("""{"tag_name":"v2","assets":[{"name":"notes.txt"}]}"""))
+        assertNull(updater.parse("""{"tag_name":"v2","prerelease":true,"assets":[{"name":"a.apk"}]}"""))
+    }
+}

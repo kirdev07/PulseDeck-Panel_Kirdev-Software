@@ -44,6 +44,7 @@ import com.kirdev.pulsedeckpanel.core.theme.Palette
 import com.kirdev.pulsedeckpanel.core.theme.PanelColors
 import com.kirdev.pulsedeckpanel.core.ui.ScreenHeader
 import com.kirdev.pulsedeckpanel.data.local.Cell
+import com.kirdev.pulsedeckpanel.data.update.UpdateState
 import com.kirdev.pulsedeckpanel.service.PanelService
 
 @Composable
@@ -164,6 +165,9 @@ fun SettingsScreen(app: PanelApp, onBack: () -> Unit, onConnection: () -> Unit) 
                 }
                 Note("«Забыть» удаляет ключ с телефона. Чтобы отключить телефон и на ПК, отзовите его на экране «Телефон» в PulseDeck.",
                     "Добавить ПК", onConnection)
+
+                Section("Обновления")
+                Updates(app)
             }
         }
     }
@@ -238,5 +242,34 @@ private fun Toggle(title: String, text: String, checked: Boolean, enabled: Boole
                 uncheckedBorderColor = Palette.Border,
             ),
         )
+    }
+}
+
+/** GitHub Releases: check, show what is new, download; Android's installer does the rest. */
+@Composable
+private fun Updates(app: PanelApp) {
+    val state by app.updater.state.collectAsStateWithLifecycle()
+    val current = app.updater.current
+    val check = "Проверить" to { app.updater.check() }
+    val (text, action) = when (val s = state) {
+        UpdateState.Idle -> "Установлена версия $current." to check
+        UpdateState.Checking -> "Проверяю обновления…" to null
+        is UpdateState.UpToDate -> "Установлена последняя версия ${s.version}." to check
+        is UpdateState.Available -> "Доступна версия ${s.release.version} (у вас $current)." to
+            ("Скачать и установить" to { app.updater.download(s.release) })
+        is UpdateState.Downloading -> "Скачиваю ${s.release.version}: ${(s.fraction * 100).toInt()}%" to null
+        is UpdateState.Ready -> ("Версия ${s.release.version} скачана. Подтвердите установку в окне Android. " +
+            "Если окна нет — разрешите PulseDeck Panel устанавливать приложения и нажмите «Установить».") to
+            ("Установить" to { app.updater.install(s.file) })
+        is UpdateState.Failed -> s.message to check
+    }
+    val notes = (state as? UpdateState.Available)?.release?.notes.orEmpty().trim()
+    Panel("PulseDeck Panel $current", text) {
+        if (notes.isNotEmpty()) Text(notes.take(600), fontSize = 12.sp, color = Palette.Text2)
+        if (action != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = action.second) { Text(action.first, color = Palette.Text) }
+            }
+        }
     }
 }

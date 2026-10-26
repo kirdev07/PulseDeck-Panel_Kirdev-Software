@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Local network only: discovery (UDP broadcast) and the TLS connection to PulseDeck. -->
+    <!-- Discovery and the TLS connection to PulseDeck on the local network; GitHub for updates. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Background link with an ongoing notification (type «connected device»: the PC). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -11,6 +11,8 @@
     <!-- Optional, user-enabled: start after the phone boots and open the display on unlock. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Updates from GitHub Releases: the system installer asks the user before installing. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- No backup: the pairing token must not leave the phone. -->
     <application
@@ -48,6 +50,15 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
 
 </manifest>

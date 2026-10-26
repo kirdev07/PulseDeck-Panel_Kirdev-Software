@@ -22,3 +22,6 @@ local.properties
 # IDE and Kotlin caches
 .idea/
 .kotlin/
+
+# Release APKs for GitHub Releases (uploaded there, not committed)
+/dist/
