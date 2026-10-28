@@ -227,4 +227,4 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
 )
 
 /** QR pairing is off for now: weak phone cameras could not read the code from a monitor. */
-private const val QR_SCAN_ENABLED = false
+private const val QR_SCAN_ENABLED = true

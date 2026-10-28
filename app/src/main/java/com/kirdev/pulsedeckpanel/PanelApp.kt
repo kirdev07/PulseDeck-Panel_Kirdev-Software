@@ -28,6 +28,5 @@ class PanelApp : Application() {
         settings = AppSettings(this)
         connection = PanelConnection(pairing, CoroutineScope(SupervisorJob() + Dispatchers.Default))
         updater = Updater(this, CoroutineScope(SupervisorJob() + Dispatchers.Main))
-        updater.checkAutomatically()
     }
 }

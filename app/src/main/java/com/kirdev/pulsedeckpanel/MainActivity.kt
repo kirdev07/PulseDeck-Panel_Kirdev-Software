@@ -12,7 +12,11 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import com.kirdev.pulsedeckpanel.core.theme.Palette
+import com.kirdev.pulsedeckpanel.core.ui.AppOverlays
 import com.kirdev.pulsedeckpanel.core.theme.PanelColors
 import com.kirdev.pulsedeckpanel.core.theme.PanelTheme
 import com.kirdev.pulsedeckpanel.navigation.AppNavigation
@@ -38,13 +42,21 @@ class MainActivity : ComponentActivity() {
                 Palette.theme = PanelColors.entries.firstOrNull { c -> c.name == it.theme } ?: PanelColors.DARK
             }
         }
-        setContent { PanelTheme { AppNavigation(app) } }
+        setContent {
+            PanelTheme {
+                Box(Modifier.fillMaxSize()) {
+                    AppNavigation(app)
+                    AppOverlays(app)          // local network permission (Android 17), update prompt
+                }
+            }
+        }
     }
 
     override fun onStart() {
         super.onStart()
         app.connection.setUiVisible(true)
         app.connection.hold(UI)
+        app.updater.checkAutomatically()       // a new version downloads at once and is offered
         if (app.settings.background && app.pairing.load() != null) PanelService.start(this)
     }
 

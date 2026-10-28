@@ -3,6 +3,8 @@
 
     <!-- Discovery and the TLS connection to PulseDeck on the local network; GitHub for updates. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 17+: search for the PC and the Wi-Fi link to it («Nearby devices», asked at runtime). -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <!-- Background link with an ongoing notification (type «connected device»: the PC). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
