@@ -135,7 +135,7 @@ class Updater(private val context: Context, private val scope: CoroutineScope) {
     }
 
     companion object {
-        const val REPO = "kirdev07/PulseDesk-Panel_Kirdev-Software"
+        const val REPO = "kirdev07/PulseDeck-Panel_Kirdev-Software"
         private const val LAST_CHECK = "last_check"
         private const val AUTO_HOURS = 1
 
