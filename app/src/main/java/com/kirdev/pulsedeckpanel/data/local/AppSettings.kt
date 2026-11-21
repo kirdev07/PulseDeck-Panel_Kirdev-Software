@@ -79,6 +79,8 @@ data class DisplayPrefs(
     val burnIn: Boolean = true,
     /** «eco» 30 / «smooth» 60 / «max» = the display's top rate (core/ui/Frames.kt). */
     val frameRate: String = "smooth",
+    /** «Облегчённый режим»: auto (weak phones) / on / off (core/ui/Device.kt). */
+    val lite: String = "auto",
     val offlineClock: Boolean = true,
     val intervalSeconds: Double = 1.5,
     val nightMode: Boolean = false,
@@ -114,7 +116,7 @@ data class DisplayPrefs(
         put("idle", idle); put("idleSize", idleSize); put("motion", motion); put("pulse", pulse)
         put("alerts", alerts); put("notify", notify); put("alertOffline", alertOffline)
         put("limits", JSONObject().apply { limits.forEach { (k, v) -> put(k.name, v) } })
-        put("burnIn", burnIn); put("frameRate", frameRate); put("offlineClock", offlineClock); put("interval", intervalSeconds)
+        put("burnIn", burnIn); put("frameRate", frameRate); put("lite", lite); put("offlineClock", offlineClock); put("interval", intervalSeconds)
         put("night", nightMode); put("nightStart", nightStart); put("nightEnd", nightEnd)
     }
 
@@ -160,7 +162,7 @@ data class DisplayPrefs(
                 pulse = b("pulse", d.pulse),
                 alerts = b("alerts", d.alerts), notify = b("notify", d.notify), alertOffline = b("alertOffline", d.alertOffline),
                 limits = Limit.entries.associateWith { limitJson?.optInt(it.name, it.default) ?: it.default },
-                burnIn = b("burnIn", d.burnIn), frameRate = s("frameRate", d.frameRate), offlineClock = b("offlineClock", d.offlineClock),
+                burnIn = b("burnIn", d.burnIn), frameRate = s("frameRate", d.frameRate), lite = s("lite", d.lite), offlineClock = b("offlineClock", d.offlineClock),
                 intervalSeconds = json.optDouble("interval", d.intervalSeconds).takeIf { !it.isNaN() } ?: d.intervalSeconds,
                 nightMode = b("night", d.nightMode), nightStart = i("nightStart", d.nightStart), nightEnd = i("nightEnd", d.nightEnd),
             ).cleaned()

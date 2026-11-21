@@ -102,7 +102,8 @@ fun IdleAnimation(kind: String, color: Color, still: Boolean, modifier: Modifier
     // Redraws on the display's frames, at most «Частота кадров» times a second (core/ui/Frames.kt).
     // The seconds ring keeps showing real seconds even with animations off.
     val ms = com.kirdev.pulsedeckpanel.core.ui.rememberFrameTime(animate || kind == "seconds")
-    val soft = kind in Idle.SOFT_EDGES
+    // Soft edges need an offscreen layer: skipped in light mode (weak GPUs).
+    val soft = kind in Idle.SOFT_EDGES && !com.kirdev.pulsedeckpanel.core.ui.Device.lite
     val glyphPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.MONOSPACE; textAlign = Paint.Align.CENTER } }
     Canvas(modifier.then(if (soft) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier)) {
         val d = density

@@ -1,5 +1,7 @@
 package com.kirdev.pulsedeckpanel
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.kirdev.pulsedeckpanel.core.theme.Palette
+import com.kirdev.pulsedeckpanel.core.ui.currentDisplay
 import com.kirdev.pulsedeckpanel.core.ui.AppOverlays
 import com.kirdev.pulsedeckpanel.core.theme.PanelTheme
 import com.kirdev.pulsedeckpanel.navigation.AppNavigation
@@ -60,7 +63,17 @@ class MainActivity : ComponentActivity() {
             PanelTheme {
                 Box(Modifier.fillMaxSize()) {
                     AppNavigation(app)
-                    AppOverlays(app)          // local network permission (Android 17), update prompt
+                    AppOverlays(app)
+                    var intro by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(!app.introDone) }
+                    if (intro) {
+                        com.kirdev.pulsedeckpanel.core.ui.LaunchIntro(
+                            enabled = app.settings.display.value.motion && !com.kirdev.pulsedeckpanel.core.ui.Device.lite,
+                            background = com.kirdev.pulsedeckpanel.core.theme.Palette.Black,
+                        ) {
+                            app.introDone = true
+                            intro = false
+                        }
+                    }          // local network permission (Android 17), update prompt
                 }
             }
         }
@@ -84,7 +97,10 @@ class MainActivity : ComponentActivity() {
     /** «Частота кадров» and night mode → the animation limit and the display mode of this window. */
     private fun applyFrames() {
         val prefs = app.settings.display.value
-        com.kirdev.pulsedeckpanel.core.ui.Frames.apply(window, display, prefs.frameRate, prefs.isNight(LocalTime.now().hour))
+        com.kirdev.pulsedeckpanel.core.ui.Device.apply(prefs.lite)
+        val lite = com.kirdev.pulsedeckpanel.core.ui.Device.lite
+        com.kirdev.pulsedeckpanel.core.ui.Frames.apply(window, currentDisplay(), if (lite) "eco" else prefs.frameRate,
+            prefs.isNight(LocalTime.now().hour))
     }
 
     private fun minuteOfDay(): Int = LocalTime.now().let { it.hour * 60 + it.minute }

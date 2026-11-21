@@ -147,7 +147,8 @@ fun DashboardScreen(
         if (glow != null) {
             Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(glow.copy(alpha = 0.22f), Palette.Black))))
         }
-        if (prefs.coverBackdrop && media != null && coverBitmap != null && Build.VERSION.SDK_INT >= 31) {
+        val lite = com.kirdev.pulsedeckpanel.core.ui.Device.lite
+        if (prefs.coverBackdrop && !lite && media != null && coverBitmap != null && Build.VERSION.SDK_INT >= 31) {
             Image(coverBitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().blur(48.dp).graphicsLayer { alpha = if (dark) 0.35f else 0.45f })
         }
@@ -267,7 +268,7 @@ private fun Center(
         val showPlayer = media != null || prefs.playerAlways
         AnimatedContent(
             targetState = showPlayer to (media?.title),
-            transitionSpec = { if (prefs.motion) fadeIn(tween(400)) togetherWith fadeOut(tween(400)) else fadeIn(tween(0)) togetherWith fadeOut(tween(0)) },
+            transitionSpec = { if (prefs.motion && !com.kirdev.pulsedeckpanel.core.ui.Device.lite) fadeIn(tween(400)) togetherWith fadeOut(tween(400)) else fadeIn(tween(0)) togetherWith fadeOut(tween(0)) },
             label = "player-or-idle",
         ) { (player, _) ->
             if (player) {

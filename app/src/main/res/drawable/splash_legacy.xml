@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8–11 (no splash screen API): the window before the app draws — the logo in its purple
+     circle on black. The app paints over it at once. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/black" />
+    <item android:width="160dp" android:height="160dp" android:gravity="center">
+        <shape android:shape="oval">
+            <solid android:color="#FF4F378B" />
+        </shape>
+    </item>
+    <item android:width="160dp" android:height="160dp" android:gravity="center" android:drawable="@drawable/ic_launcher_foreground" />
+</layer-list>

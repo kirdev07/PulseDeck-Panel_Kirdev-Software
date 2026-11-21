@@ -169,12 +169,12 @@ fun CompactPlayer(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (prefs.showCover) {
-            Cover(cover, coverSize, pulse = prefs.pulse && prefs.motion && playing)
+            Cover(cover, coverSize, pulse = prefs.pulse && prefs.motion && playing && !com.kirdev.pulsedeckpanel.core.ui.Device.lite)
             Spacer(Modifier.width(size.gap))
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (prefs.nowPlaying && playing && prefs.motion) {
+                if (prefs.nowPlaying && playing && prefs.motion && !com.kirdev.pulsedeckpanel.core.ui.Device.lite) {
                     NowPlayingBars(true, Modifier.size(if (size == PlayerSize.BIG) 22.dp else 16.dp, if (size == PlayerSize.BIG) 20.dp else 14.dp))
                     Spacer(Modifier.width(8.dp))
                 }

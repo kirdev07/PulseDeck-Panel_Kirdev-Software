@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "com.kirdev.pulsedeckpanel"
-        minSdk = 30
+        minSdk = 26
         targetSdk = 37
         versionCode = 4
         versionName = "1.1.0"

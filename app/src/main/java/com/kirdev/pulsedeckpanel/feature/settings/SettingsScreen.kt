@@ -59,6 +59,7 @@ import com.kirdev.pulsedeckpanel.core.theme.Palette
 import com.kirdev.pulsedeckpanel.core.theme.Swatch
 import com.kirdev.pulsedeckpanel.core.ui.IconButtonSmall
 import com.kirdev.pulsedeckpanel.core.ui.PanelIcons
+import com.kirdev.pulsedeckpanel.core.ui.currentDisplay
 import com.kirdev.pulsedeckpanel.data.local.DisplayPrefs
 import com.kirdev.pulsedeckpanel.data.local.Limit
 import com.kirdev.pulsedeckpanel.data.local.Tile
@@ -351,11 +352,15 @@ private fun ScreenPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) ->
     Toggle("Без связи — только часы", "Пока ПК недоступен, на экране остаются одни часы.", p.offlineClock) { on ->
         set { it.copy(offlineClock = on) }
     }
-    val window = (LocalContext.current as? android.app.Activity)
-    val top = com.kirdev.pulsedeckpanel.core.ui.Frames.maxRate(window?.display)
+    val activity = androidx.activity.compose.LocalActivity.current
+    val top = com.kirdev.pulsedeckpanel.core.ui.Frames.maxRate(activity?.let { it.currentDisplay() })
     Panel("Частота кадров", "Как часто перерисовываются анимации. Экран телефона переключается на эту частоту: ниже — меньше расход батареи. Ночью всегда экономно.") {
         KeyChips(listOf("eco" to "Экономно · 30", "smooth" to "Плавно · 60") + (if (top > 60) listOf("max" to "Максимум · $top Гц") else emptyList()),
             p.frameRate) { v -> set { it.copy(frameRate = v) } }
+    }
+    Panel("Облегчённый режим", "Для слабых телефонов: анимации 30 кадров, без размытой обложки, мягких краёв, пульсации и переходов. " +
+        "Этот телефон: " + com.kirdev.pulsedeckpanel.core.ui.Device.summary() + ".") {
+        KeyChips(listOf("auto" to "Авто", "on" to "Включён", "off" to "Выключен"), p.lite) { v -> set { it.copy(lite = v) } }
     }
     Panel("Обновление показателей", "Реже — меньше нагрузка на ПК и телефон.") {
         val options = listOf(1.0 to "1 с", 1.5 to "1,5 с", 3.0 to "3 с", 5.0 to "5 с", 10.0 to "10 с")

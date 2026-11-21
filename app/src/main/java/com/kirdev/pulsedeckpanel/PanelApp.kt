@@ -13,6 +13,8 @@ import kotlinx.coroutines.SupervisorJob
 
 /** Holds the few app-wide objects; screens get them through ViewModel factories. */
 class PanelApp : Application() {
+    /** The launch animation already played in this process (not again after a rotation or a return). */
+    var introDone = false
     lateinit var pairing: PairingStore
         private set
     lateinit var connection: PanelConnection
@@ -27,6 +29,7 @@ class PanelApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.kirdev.pulsedeckpanel.core.ui.Device.probe(this)
         pairing = PairingStore(this)
         settings = AppSettings(this)
         connection = PanelConnection(pairing, CoroutineScope(SupervisorJob() + Dispatchers.Default))
