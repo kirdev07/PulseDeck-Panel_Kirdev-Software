@@ -8,7 +8,12 @@ import com.kirdev.pulsedeckpanel.data.remote.PinnedTls
 import com.kirdev.pulsedeckpanel.data.remote.Protocol
 import com.kirdev.pulsedeckpanel.feature.connection.ConnectionViewModel
 import com.kirdev.pulsedeckpanel.feature.monitoring.Names
-import com.kirdev.pulsedeckpanel.feature.monitoring.barState
+import com.kirdev.pulsedeckpanel.data.local.DisplayPrefs
+import com.kirdev.pulsedeckpanel.data.local.Limit
+import com.kirdev.pulsedeckpanel.data.local.Tile
+import com.kirdev.pulsedeckpanel.feature.monitoring.AlertMonitor
+import com.kirdev.pulsedeckpanel.feature.monitoring.History
+import com.kirdev.pulsedeckpanel.feature.monitoring.tileView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -82,26 +87,82 @@ class FormatTest {
         assertEquals("1:02:05", Format.time(3725.0))
     }
 
-    @Test fun barShowsRealVolumesAndDashesWithoutData() {
-        assertEquals(listOf("CPU", "GPU", "RAM", "Сеть"), barState(null).cells.map { it.name })
-        assertTrue(barState(null).cells.all { it.value == "—" && it.fraction == null })
-        assertTrue(barState(null).disks.isEmpty())
+    @Test fun tilesShowDashesWithoutData() {
+        for (tile in Tile.entries) assertEquals("—", tileView(tile, null, null, null).value)
+        assertNull(tileView(Tile.CPU, null, null, null).fraction)
+        assertFalse(tileView(Tile.NET, null, null, null).bar)
     }
 
-    @Test fun hardwareNamesAndSeveralDisks() {
+    @Test fun hardwareNamesAndTiles() {
         assertEquals("Intel Core i5-13420H", Names.cpu("13th Gen Intel(R) Core(TM) i5-13420H"))
         assertEquals("AMD Ryzen 7 5800H with Radeon Graphics", Names.cpu("AMD Ryzen 7 5800H with Radeon Graphics"))
         assertEquals("RTX 3050", Names.gpu("NVIDIA GeForce RTX 3050 6GB Laptop GPU"))
-        val text = """{"type":"metrics","cpu":{"load":5,"name":"X"},
-            "gpu":{"load":1,"name":"NVIDIA GeForce RTX 3050 6GB Laptop GPU","memory_total":6442450944,"memory_used":0},
-            "ram":{"percent":50,"used":8,"total":16},"net":{"down":1536,"up":null},
-            "disks":[{"name":"C:","label":"","total":100,"free":40},{"name":"D:","label":"Data","total":200,"free":100}]}"""
-        val bar = barState((Protocol.parse(text, 0) as Protocol.Message.MetricsUpdate).metrics)
-        assertEquals("RTX 3050 · 6.0 GB", bar.cells[1].caption)
-        assertEquals("↓1.5 KB/s", bar.cells[3].value)
-        assertEquals("↑ —", bar.cells[3].caption)
-        assertEquals(listOf("C:", "D: Data"), bar.disks.map { it.name })
+        val m = metrics()
+        assertEquals("RTX 3050 · 3.0 GB / 6.0 GB", tileView(Tile.GPU, m, null, null).caption)
+        assertEquals("↓1.5 KB/s", tileView(Tile.NET, m, null, null).value)
+        assertEquals("↑ —", tileView(Tile.NET, m, null, null).caption)
+        assertEquals("D: Data", tileView(Tile.DISK, m, null, m.disks[1]).name)
+        assertEquals("2", tileView(Tile.CORES, m, null, null).value)
+        assertEquals("макс. 80%", tileView(Tile.CORES, m, null, null).caption)
+        assertEquals("нет данных", tileView(Tile.VRAM, metrics(vram = false), null, null).caption)
+        assertEquals("50%", tileView(Tile.VRAM, m, null, null).value)
     }
+
+    @Test fun extraPcFields() {
+        val m = metrics()
+        assertEquals(3725.0, m.uptime!!, 0.1)
+        assertEquals(54.0, m.battery!!.percent!!, 0.1)
+        assertFalse(m.battery!!.plugged)
+        assertEquals("1 ч 2 мин", Format.uptime(m.uptime))
+        assertEquals("2 д 0 ч", Format.uptime(172_800.0))
+    }
+
+    @Test fun historyKeepsThreeMinutes() {
+        var history = History()
+        repeat(100) { history = history.plus(metrics()) }
+        assertEquals(History.POINTS, history["cpu"].size)
+        assertEquals(50.0, history["vram"].last()!!, 0.1)
+    }
+
+    @Test fun warningsNeedTenSecondsAndRearmBelowTheLimit() {
+        val monitor = AlertMonitor()
+        val prefs = DisplayPrefs()
+        val hot = metrics(cpu = 95.0)
+        assertTrue(monitor.check(hot, prefs, 2.0).isEmpty())
+        repeat(3) { monitor.check(hot, prefs, 2.0) }
+        val fired = monitor.check(hot, prefs, 2.0)
+        assertEquals(listOf(Limit.CPU), fired.map { it.first })
+        assertTrue(fired[0].second.contains("95%"))
+        assertTrue(monitor.check(hot, prefs, 2.0).isEmpty())              // once, not every sample
+        monitor.check(metrics(cpu = 88.0), prefs, 2.0)                    // within 5 points: still active
+        assertTrue(Limit.CPU in monitor.activeLimits)
+        monitor.check(metrics(cpu = 40.0), prefs, 2.0)
+        assertFalse(Limit.CPU in monitor.activeLimits)
+        assertTrue(AlertMonitor.tilesOf(setOf(Limit.CPU)).contains(Tile.CORES))
+    }
+
+    @Test fun prefsSurviveJsonAndFixBadValues() {
+        val prefs = DisplayPrefs(accent = "green", layout = "music", tiles = listOf(Tile.VRAM, Tile.CPU),
+            tileOrder = listOf(Tile.NET, Tile.CPU), limits = mapOf(Limit.CPU to 70), idle = "galaxy", themeByTime = true)
+        val back = DisplayPrefs.fromJson(org.json.JSONObject(prefs.toJson().toString()))
+        assertEquals("green", back.accent)
+        assertEquals("music", back.layout)
+        assertEquals(Tile.entries.size, back.tileOrder.size)               // missing tiles are added at the end
+        assertEquals(listOf(Tile.NET, Tile.CPU), back.tileOrder.take(2))
+        assertEquals(listOf(Tile.CPU, Tile.VRAM), back.shownTiles.filter { it == Tile.CPU || it == Tile.VRAM })
+        assertEquals(70, back.limit(Limit.CPU))
+        assertEquals(50, DisplayPrefs(limits = mapOf(Limit.CPU to 5)).cleaned().limit(Limit.CPU))
+        assertEquals("LIGHT", back.themeAt(12 * 60))
+        assertEquals("DARK", back.themeAt(22 * 60))
+    }
+
+    private fun metrics(cpu: Double = 5.0, vram: Boolean = true) = (Protocol.parse("""{"type":"metrics",
+        "cpu":{"load":$cpu,"name":"X","cores":2,"per_core":[80,20]},
+        "gpu":{"load":1,"name":"NVIDIA GeForce RTX 3050 6GB Laptop GPU","memory_total":6442450944,"memory_used":${if (vram) 3221225472 else null}},
+        "ram":{"percent":50,"used":8,"total":16},"net":{"down":1536,"up":null},"uptime":3725,
+        "battery":{"percent":54,"plugged":false},
+        "disks":[{"name":"C:","label":"","total":100,"free":40},{"name":"D:","label":"Data","total":200,"free":100}]}""", 0)
+        as Protocol.Message.MetricsUpdate).metrics
 }
 
 class ConnectionLogicTest {

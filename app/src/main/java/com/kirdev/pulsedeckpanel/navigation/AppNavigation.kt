@@ -36,9 +36,10 @@ fun AppNavigation(app: PanelApp) {
 
     when (route) {
         Route.Dashboard -> {
-            val vm: DashboardViewModel = viewModel(factory = viewModelFactory { initializer { DashboardViewModel(app.connection, app.settings) } })
+            val vm: DashboardViewModel = viewModel(factory = viewModelFactory { initializer { DashboardViewModel(app, app.connection, app.settings) } })
             val update by app.updater.state.collectAsStateWithLifecycle()
             DashboardScreen(vm, onSettings = { route = Route.Settings }, onConnection = { route = Route.Connection },
+                onLayout = { layout -> app.settings.updateDisplay { it.copy(layout = layout) } },
                 updateAvailable = update is UpdateState.Available)
         }
         Route.Settings -> {

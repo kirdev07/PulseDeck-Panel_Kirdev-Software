@@ -20,7 +20,20 @@ data class Metrics(
     val netDown: Double?,
     val netUp: Double?,
     val disks: List<Disk>,
-)
+    /** Logical processors and the load of each (empty when the PC does not send them). */
+    val cores: Int? = null,
+    val perCore: List<Double?> = emptyList(),
+    /** Seconds since the PC started. */
+    val uptime: Double? = null,
+    /** Laptops only; a desktop PC has no battery: null. */
+    val battery: Battery? = null,
+) {
+    /** Video memory in use, percent; null when the PC does not report it. */
+    val vramPercent: Double? get() = if (gpuMemoryTotal != null && gpuMemoryUsed != null && gpuMemoryTotal > 0)
+        100.0 * gpuMemoryUsed / gpuMemoryTotal else null
+}
+
+data class Battery(val percent: Double?, val plugged: Boolean)
 
 enum class PlayStatus { PLAYING, PAUSED }
 

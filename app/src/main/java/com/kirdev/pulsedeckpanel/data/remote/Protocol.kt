@@ -1,5 +1,6 @@
 package com.kirdev.pulsedeckpanel.data.remote
 
+import com.kirdev.pulsedeckpanel.data.model.Battery
 import com.kirdev.pulsedeckpanel.data.model.Disk
 import com.kirdev.pulsedeckpanel.data.model.Load
 import com.kirdev.pulsedeckpanel.data.model.MediaSession
@@ -83,6 +84,12 @@ object Protocol {
                     Disk(it.optString("name"), it.optString("label"), it.optLong("total"), it.optLong("free"))
                 }
             }.filter { it.total > 0 },
+            cores = cpu?.optInt("cores", 0)?.takeIf { it > 0 },
+            perCore = cpu?.optJSONArray("per_core")?.let { array ->
+                (0 until array.length()).map { if (array.isNull(it)) null else array.optDouble(it).takeIf { v -> !v.isNaN() } }
+            }.orEmpty(),
+            uptime = json.doubleOrNull("uptime"),
+            battery = json.optJSONObject("battery")?.let { Battery(it.doubleOrNull("percent"), it.optBoolean("plugged")) },
         )
     }
 

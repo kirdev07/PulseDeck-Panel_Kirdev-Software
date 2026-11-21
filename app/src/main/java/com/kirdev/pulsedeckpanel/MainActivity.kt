@@ -9,7 +9,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.Box
@@ -17,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.kirdev.pulsedeckpanel.core.theme.Palette
 import com.kirdev.pulsedeckpanel.core.ui.AppOverlays
-import com.kirdev.pulsedeckpanel.core.theme.PanelColors
 import com.kirdev.pulsedeckpanel.core.theme.PanelTheme
 import com.kirdev.pulsedeckpanel.navigation.AppNavigation
 import com.kirdev.pulsedeckpanel.service.PanelService
@@ -39,7 +40,13 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {                       // «Обновление показателей» applies to the live link
             app.settings.display.collect {
                 app.connection.setInterval(it.intervalSeconds)
-                Palette.theme = PanelColors.entries.firstOrNull { c -> c.name == it.theme } ?: PanelColors.DARK
+                Palette.apply(it, minuteOfDay())
+            }
+        }
+        lifecycleScope.launch {                       // «Белая днём, тёмная вечером»: checked every minute
+            while (true) {
+                delay((60 - LocalTime.now().second) * 1000L)
+                Palette.apply(app.settings.display.value, minuteOfDay())
             }
         }
         setContent {
@@ -66,6 +73,8 @@ class MainActivity : ComponentActivity() {
         app.connection.release(UI)
         super.onStop()
     }
+
+    private fun minuteOfDay(): Int = LocalTime.now().let { it.hour * 60 + it.minute }
 
     private companion object {
         const val UI = "ui"

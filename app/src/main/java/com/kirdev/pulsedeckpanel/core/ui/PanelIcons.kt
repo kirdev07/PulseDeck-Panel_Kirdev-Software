@@ -41,6 +41,15 @@ object PanelIcons {
     val Music = icon("music", "M9 18V5l11-2v13", "M6.5 15.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5",
         "M17.5 13.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5")
     val Volume = icon("volume", "M4 9.5h3.5L12 5.5v13l-4.5-4H4z", "M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11")
+    val Palette = icon("palette", "M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7c0-1.2-1-1.6-1-2.6c0-.9.7-1.6 1.7-1.6H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z",
+        "M7.5 11.5h.01M10 7.5h.01M14.5 7.5h.01")
+    val Clock = icon("clock", "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18", "M12 7.5V12l3 2")
+    val Bell = icon("bell", "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z", "M10 20.5a2.2 2.2 0 0 0 4 0")
+    val Pulse = icon("pulse", "M3 12h4l2-5l4 10l2-5h6")
+    val Download = icon("download", "M12 4v11", "M7.5 10.5L12 15l4.5-4.5", "M5 19.5h14")
+    val Check = icon("check", "M5.5 12.5l4 4l9-9")
+    val Up = icon("up", "M6 14.5l6-6l6 6")
+    val Down = icon("down", "M6 9.5l6 6l6-6")
     val Play = icon("play", "M8 5v14l11-7z", filled = true)
     val Pause = icon("pause", "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z", filled = true)
     val Next = icon("next", "M5 5v14l10-7z", "M16.5 5h2v14h-2z", filled = true)

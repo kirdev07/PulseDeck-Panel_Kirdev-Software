@@ -34,6 +34,20 @@ object Format {
         return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s) else String.format(Locale.US, "%d:%02d", m, s)
     }
 
+    /** How long the PC has been on: «3 д 4 ч», «5 ч 12 мин», «7 мин». */
+    fun uptime(seconds: Double?): String {
+        if (seconds == null) return UNKNOWN
+        val total = seconds.toLong().coerceAtLeast(0)
+        val d = total / 86_400
+        val h = total % 86_400 / 3600
+        val m = total % 3600 / 60
+        return when {
+            d > 0 -> "$d д $h ч"
+            h > 0 -> "$h ч $m мин"
+            else -> "$m мин"
+        }
+    }
+
     /** Fraction 0..1 for a progress bar, 0 when unknown. */
     fun fraction(percent: Double?): Float = ((percent ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
 }

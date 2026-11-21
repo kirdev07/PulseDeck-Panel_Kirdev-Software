@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -29,12 +30,12 @@ import com.kirdev.pulsedeckpanel.core.theme.Palette
 
 /** 3 dp bar; drawn in one Canvas instead of nested layouts. */
 @Composable
-fun ThinProgress(fraction: Float, modifier: Modifier = Modifier) {
+fun ThinProgress(fraction: Float, modifier: Modifier = Modifier, color: Color = Palette.Accent) {
     Canvas(modifier.height(3.dp)) {
         val radius = CornerRadius(size.height / 2, size.height / 2)
         drawRoundRect(Palette.Track, cornerRadius = radius)
         val width = size.width * fraction.coerceIn(0f, 1f)
-        if (width > 0f) drawRoundRect(Palette.Text, size = Size(width, size.height), cornerRadius = radius)
+        if (width > 0f) drawRoundRect(color, size = Size(width, size.height), cornerRadius = radius)
     }
 }
 
