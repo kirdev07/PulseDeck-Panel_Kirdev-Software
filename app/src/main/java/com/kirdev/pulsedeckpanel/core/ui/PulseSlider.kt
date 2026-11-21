@@ -103,7 +103,7 @@ fun PulseSlider(
     val rest = if (enabled) Palette.Track else Palette.Disabled.copy(alpha = 0.12f)
     val dot = if (enabled) Palette.Accent else Palette.Disabled
     val density = LocalDensity.current
-    val tall = if (wave) 24.dp else track + 20.dp
+    val tall = track + 20.dp
 
     Box(
         modifier.fillMaxWidth().height(maxOf(minHeight, tall)).onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
@@ -146,7 +146,7 @@ fun PulseSlider(
         contentAlignment = Alignment.CenterStart,
     ) {
         Canvas(Modifier.fillMaxWidth().height(tall)) {
-            if (wave) drawWave(shown, active, rest, handleW.toPx(), waveHeight.value, time.value)
+            if (wave) drawWave(shown, active, rest, dot, track.toPx(), handleW.toPx(), waveHeight.value, time.value)
             else drawThick(shown, active, rest, dot, track.toPx(), handleW.toPx())
         }
         val text = bubble?.takeIf { held != null }?.invoke(shown)
@@ -185,25 +185,30 @@ private fun DrawScope.drawThick(v: Float, active: Color, rest: Color, dot: Color
         CornerRadius(handle / 2))
 }
 
-private const val WAVE_LENGTH = 20f      // dp
-private const val WAVE_HEIGHT = 2.2f     // dp
-private const val WAVE_SPEED = 8f        // dp per second
-private const val WAVE_STROKE = 4f       // dp
+private const val WAVE_LENGTH = 32f      // dp
+private const val WAVE_HEIGHT = 3f       // dp
+private const val WAVE_SPEED = 10f       // dp per second
 
-/** Played part as a drifting wave that flattens near the handle; the rest a flat line of the same width. */
-private fun DrawScope.drawWave(v: Float, active: Color, rest: Color, handle: Float, height: Float, timeMs: Float) {
+/**
+ * The same track as [drawThick] — same thickness, gaps, handle and stop dot — but the played part
+ * is a band that waves while the track plays and lies flat on pause (then both look the same).
+ */
+private fun DrawScope.drawWave(v: Float, active: Color, rest: Color, dot: Color, track: Float, handle: Float, height: Float, timeMs: Float) {
+    if (height <= 0.01f) {
+        drawThick(v, active, rest, dot, track, handle)
+        return
+    }
     val dp = density
-    val stroke = WAVE_STROKE * dp
-    val gap = 5 * dp
+    val gap = 6.dp.toPx()
     val x = (size.width - handle) * v
     val mid = size.height / 2
     val length = WAVE_LENGTH * dp
     val amp = WAVE_HEIGHT * dp * height
-    val taper = 1.5f * length
-    fun amplitude(px: Float) = amp * max(0f, min(min(1f, (x - gap - px) / taper * 2f), px / (length / 2)))
+    val taper = length
+    fun amplitude(px: Float) = amp * max(0f, min(min(1f, (x - gap - px) / taper), (px - track / 2) / (length / 2)))
     val path = Path()
     val phase = (timeMs / 1000f * WAVE_SPEED) % WAVE_LENGTH
-    var px = -phase * dp
+    var px = track / 2 - phase * dp - length
     var sign = 1f
     var py = sign * amplitude(px)
     path.moveTo(px, mid + py)
@@ -217,11 +222,22 @@ private fun DrawScope.drawWave(v: Float, active: Color, rest: Color, handle: Flo
         px = nx
         py = ny
     }
-    val s = Stroke(width = stroke, cap = StrokeCap.Round)
-    if (x - gap > stroke / 2) clipRect(right = x - gap) { drawPath(path, active, style = s) }
-    if (x + handle + gap < size.width - stroke / 2) {
-        drawLine(rest, Offset(x + handle + gap + stroke / 2, mid), Offset(size.width - stroke / 2, mid), stroke, StrokeCap.Round)
+    val end = x - gap
+    if (end > track / 2) {
+        clipRect(left = 0f, right = end) {
+            drawPath(path, active, style = Stroke(width = track, cap = StrokeCap.Round))
+        }
     }
-    drawRoundRect(active, Offset(x, mid - 10 * dp), Size(handle, 20 * dp), CornerRadius(handle / 2))
+    // the rest and the handle exactly as on the flat track
+    val inner = CornerRadius(2.dp.toPx())
+    val outer = CornerRadius(track / 2)
+    val top = mid - track / 2
+    val rightStart = x + handle + gap
+    if (rightStart < size.width) {
+        drawPath(Path().apply {
+            addRoundRect(RoundRect(min(rightStart, size.width - track / 2), top, size.width, top + track, inner, outer, outer, inner))
+        }, rest)
+        if (size.width - rightStart > track) drawCircle(dot, 2.dp.toPx(), Offset(size.width - track / 2, mid))
+    }
+    drawRoundRect(active, Offset(x, mid - (track + 20.dp.toPx()) / 2), Size(handle, track + 20.dp.toPx()), CornerRadius(handle / 2))
 }
-
