@@ -545,14 +545,16 @@ private fun LimitRow(limit: Limit, value: Int, onChange: (Int) -> Unit) {
     var current by remember(value) { mutableFloatStateOf(value.toFloat()) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(limit.title, fontSize = 13.sp, color = Palette.Text2, modifier = Modifier.width(150.dp))
-        Slider(
-            value = current, onValueChange = { current = it }, onValueChangeFinished = { onChange(current.toInt()) },
-            valueRange = limit.range.first.toFloat()..limit.range.last.toFloat(), modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(thumbColor = Palette.Accent, activeTrackColor = Palette.Accent,
-                inactiveTrackColor = Palette.Track),
+        val span = (limit.range.last - limit.range.first).toFloat()
+        com.kirdev.pulsedeckpanel.core.ui.PulseSlider(
+            (current - limit.range.first) / span,
+            onChange = { current = limit.range.first + it * span },
+            onDone = { current = limit.range.first + it * span; onChange(kotlin.math.round(current).toInt()) },
+            modifier = Modifier.weight(1f), label = limit.title, steps = span.toInt(), track = 10.dp,
+            bubble = { "${kotlin.math.round(limit.range.first + it * span).toInt()}%" },
         )
         Spacer(Modifier.width(10.dp))
-        Text("${if (limit.over) "≥" else "≤"} ${current.toInt()}%", fontSize = 13.sp, color = Palette.Text,
+        Text("${if (limit.over) "≥" else "≤"} ${kotlin.math.round(current).toInt()}%", fontSize = 13.sp, color = Palette.Text,
             modifier = Modifier.width(56.dp))
     }
 }

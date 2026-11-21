@@ -2,6 +2,7 @@ package com.kirdev.pulsedeckpanel
 
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -66,8 +67,9 @@ class MainActivity : ComponentActivity() {
                     AppOverlays(app)
                     var intro by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(!app.introDone) }
                     if (intro) {
+                        val display by app.settings.display.collectAsStateWithLifecycle()
                         com.kirdev.pulsedeckpanel.core.ui.LaunchIntro(
-                            enabled = app.settings.display.value.motion && !com.kirdev.pulsedeckpanel.core.ui.Device.lite,
+                            enabled = display.motion && !com.kirdev.pulsedeckpanel.core.ui.Device.lite,
                             background = com.kirdev.pulsedeckpanel.core.theme.Palette.Black,
                         ) {
                             app.introDone = true

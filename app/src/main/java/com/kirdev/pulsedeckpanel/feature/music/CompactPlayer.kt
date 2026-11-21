@@ -293,6 +293,7 @@ private fun NowPlayingBars(motion: Boolean, modifier: Modifier) {
 }
 
 /** Track position with a 24 dp touch area: tap to jump, drag to scrub (sent when the finger lifts). */
+/** Track position and PC volume: the shared [PulseSlider], slim enough for the panel's compact player. */
 @Composable
 private fun SeekBar(
     fraction: Float,
@@ -301,32 +302,11 @@ private fun SeekBar(
     wave: Boolean = false,
     playing: Boolean = false,
     motion: Boolean = true,
+    label: String = "Позиция трека",
+    bubble: ((Float) -> String)? = null,
 ) {
-    var current by remember { mutableFloatStateOf(0f) }
-    val seekNow by rememberUpdatedState(onSeek)
-    val dragNow by rememberUpdatedState(onDrag)
-    Box(
-        Modifier.fillMaxWidth().height(24.dp)
-            .pointerInput(Unit) {
-                detectTapGestures { seekNow((it.x / size.width).coerceIn(0f, 1f)) }
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { current = (it.x / size.width).coerceIn(0f, 1f); dragNow(current) },
-                    onHorizontalDrag = { change, _ ->
-                        change.consume()
-                        current = (change.position.x / size.width).coerceIn(0f, 1f); dragNow(current)
-                    },
-                    onDragEnd = { seekNow(current) },
-                    onDragCancel = { seekNow(current) },
-                )
-            }
-            .semantics { contentDescription = "Позиция трека" },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (wave) SquigglyProgress(fraction, playing, motion, Modifier.fillMaxWidth().height(24.dp))
-        else ThinProgress(fraction, Modifier.fillMaxWidth())
-    }
+    com.kirdev.pulsedeckpanel.core.ui.PulseSlider(fraction, onDrag, onSeek, label = label, track = 8.dp, wave = wave,
+        playing = playing && motion, bubble = bubble, minHeight = 28.dp, motion = motion)
 }
 
 /** PC speaker volume (not the player's): the same thin bar as the track, sent when the finger lifts. */
@@ -338,7 +318,7 @@ private fun VolumeRow(volume: SystemVolume, onSet: (Int) -> Unit) {
         Icon(PanelIcons.Volume, contentDescription = null, tint = Palette.Text3, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f).semantics { contentDescription = "Громкость ПК" }) {
-            SeekBar(value, onDrag = { dragging = it }, onSeek = { dragging = null; onSet((it * 100).toInt()) })
+            SeekBar(value, onDrag = { dragging = it }, onSeek = { dragging = null; onSet((it * 100).toInt()) }, label = "Громкость ПК")
         }
         Spacer(Modifier.width(8.dp))
         Text("${(value * 100).toInt()}", style = Numbers.copy(color = Palette.Text3), modifier = Modifier.width(24.dp))
