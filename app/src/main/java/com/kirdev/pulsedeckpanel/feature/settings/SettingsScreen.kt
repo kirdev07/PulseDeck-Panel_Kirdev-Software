@@ -284,8 +284,8 @@ private fun TilesPage(app: PanelApp, p: DisplayPrefs, set: ((DisplayPrefs) -> Di
     Panel("Если плитки не помещаются", "") {
         KeyChips(listOf("wrap" to "Второй ряд", "scroll" to "Листать пальцем"), p.tileRows) { v -> set { it.copy(tileRows = v) } }
     }
-    Toggle("Мини-графики в плитках", "Последние 3 минуты.", p.sparks) { on -> set { it.copy(sparks = on) } }
-    Note("Нажмите на плитку — откроются подробности: большой график, ядра, все диски.")
+    Toggle("Графики в раскладке «Мониторинг»", "Последние 3 минуты в больших карточках. В нижнем ряду графиков нет.", p.sparks) { on -> set { it.copy(sparks = on) } }
+    Note("Нажмите на плитку — откроются подробности: график, ядра, все диски.")
 }
 
 @Composable

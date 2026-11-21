@@ -196,10 +196,10 @@ private fun TileCell(
             Spacer(Modifier.height(if (card) 6.dp else 3.dp))
             if (view.bar) ThinProgress(view.fraction ?: 0f, Modifier.fillMaxWidth(), if (alert) Palette.Warn else Palette.Accent)
             if (view.cores.isNotEmpty()) CoreStrip(view.cores, Modifier.fillMaxWidth().height(if (card) 40.dp else 14.dp))
-            if (sparks && series != null) {
+            // Graphs only in the big cards of «Мониторинг»; the bottom row of the panel stays clean.
+            if (card && sparks && series != null) {
                 Spacer(Modifier.height(4.dp))
-                Sparkline(history, series, view.tile != Tile.NET,
-                    Modifier.fillMaxWidth().then(if (card) Modifier.weight(1f) else Modifier.height(16.dp)), fill = true)
+                Sparkline(history, series, view.tile != Tile.NET, Modifier.fillMaxWidth().weight(1f), fill = true)
             }
             dots?.let { (count, index) ->
                 Row(Modifier.padding(top = 4.dp)) {
