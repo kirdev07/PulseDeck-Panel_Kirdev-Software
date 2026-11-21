@@ -39,23 +39,14 @@ private const val WAVE_TAPER = 1.5f      // wavelengths
 @Composable
 fun SquigglyProgress(fraction: Float, playing: Boolean, motion: Boolean, modifier: Modifier = Modifier) {
     val height = remember { Animatable(if (playing) 1f else 0f) }
-    val phase = remember { mutableFloatStateOf(0f) }
+    // The wave drifts with the shared frame clock (at most «Частота кадров» redraws a second).
+    val time = com.kirdev.pulsedeckpanel.core.ui.rememberFrameTime(playing && motion)
     LaunchedEffect(playing) {
         if (playing) {
             kotlinx.coroutines.delay(60)
             height.animateTo(1f, tween(800, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)))
         } else {
             height.animateTo(0f, tween(550, easing = CubicBezierEasing(0f, 0f, 0f, 1f)))
-        }
-    }
-    LaunchedEffect(playing, motion) {
-        if (!playing || !motion) return@LaunchedEffect
-        var last = -1L
-        while (true) {
-            withFrameNanos { now ->
-                if (last > 0) phase.floatValue = (phase.floatValue + (now - last) / 1e9f * WAVE_SPEED) % WAVE_LENGTH
-                last = now
-            }
         }
     }
     val accent = Palette.Accent
@@ -73,7 +64,8 @@ fun SquigglyProgress(fraction: Float, playing: Boolean, motion: Boolean, modifie
             return amp * k
         }
         path.reset()
-        var prevX = -phase.floatValue * dp - length / 2
+        val phase = (time.value / 1000f * WAVE_SPEED) % WAVE_LENGTH
+        var prevX = -phase * dp - length / 2
         var sign = 1f
         var prevY = sign * amplitude(prevX)
         path.moveTo(prevX, prevY)

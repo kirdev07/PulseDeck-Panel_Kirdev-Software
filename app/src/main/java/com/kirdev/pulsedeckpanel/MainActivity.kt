@@ -33,14 +33,19 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())        // full-screen display; swipe shows the bars
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        if (Build.VERSION.SDK_INT >= 33 &&
+        // Notifications are needed for the music controls of «Работать в фоне» and for warnings: asked
+        // once here when one of them is on; later only from the switch that needs them (Настройки).
+        val display = app.settings.display.value
+        if (Build.VERSION.SDK_INT >= 33 && !app.settings.askedNotifications && (app.settings.background || display.notify) &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            app.settings.askedNotifications = true
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         lifecycleScope.launch {                       // «Обновление показателей» applies to the live link
             app.settings.display.collect {
                 app.connection.setInterval(it.intervalSeconds)
                 app.syncBackgroundMetrics()
+                applyFrames()
                 Palette.apply(it, minuteOfDay())
             }
         }
@@ -48,6 +53,7 @@ class MainActivity : ComponentActivity() {
             while (true) {
                 delay((60 - LocalTime.now().second) * 1000L)
                 Palette.apply(app.settings.display.value, minuteOfDay())
+                applyFrames()                         // night mode starts / ends on the minute
             }
         }
         setContent {
@@ -73,6 +79,12 @@ class MainActivity : ComponentActivity() {
         app.connection.setUiVisible(false)
         app.connection.release(UI)
         super.onStop()
+    }
+
+    /** «Частота кадров» and night mode → the animation limit and the display mode of this window. */
+    private fun applyFrames() {
+        val prefs = app.settings.display.value
+        com.kirdev.pulsedeckpanel.core.ui.Frames.apply(window, display, prefs.frameRate, prefs.isNight(LocalTime.now().hour))
     }
 
     private fun minuteOfDay(): Int = LocalTime.now().let { it.hour * 60 + it.minute }

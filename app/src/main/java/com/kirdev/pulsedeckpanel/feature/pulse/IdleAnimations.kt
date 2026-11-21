@@ -99,26 +99,9 @@ private const val TAU = (PI * 2).toFloat()
 fun IdleAnimation(kind: String, color: Color, still: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val animate = remember { systemAnimationsEnabled(context) } && !still
-    val ms = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(animate, kind) {
-        if (!animate) {
-            ms.floatValue = 0f
-            while (kind == "seconds") {           // real seconds, even with animations off: once a second
-                ms.floatValue += 1f
-                delay(1000L - System.currentTimeMillis() % 1000)
-            }
-            return@LaunchedEffect
-        }
-        var start = -1L
-        while (true) {
-            withFrameNanos { now ->
-                if (start < 0) start = now - (ms.floatValue * 1_000_000).toLong()
-                // Wrapped every hour: a Float of hours of milliseconds would make the motion jitter.
-                ms.floatValue = (((now - start) / 1_000_000L) % 3_600_000L).toFloat()
-            }
-            delay(33)
-        }
-    }
+    // Redraws on the display's frames, at most «Частота кадров» times a second (core/ui/Frames.kt).
+    // The seconds ring keeps showing real seconds even with animations off.
+    val ms = com.kirdev.pulsedeckpanel.core.ui.rememberFrameTime(animate || kind == "seconds")
     val soft = kind in Idle.SOFT_EDGES
     val glyphPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.MONOSPACE; textAlign = Paint.Align.CENTER } }
     Canvas(modifier.then(if (soft) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier)) {
@@ -127,7 +110,7 @@ fun IdleAnimation(kind: String, color: Color, still: Boolean, modifier: Modifier
         val h = size.height / d
         if (w <= 0f || h <= 0f) return@Canvas
         scale(d, d, Offset.Zero) {
-            drawIdle(kind, w, h, ms.floatValue, color, glyphPaint)
+            drawIdle(kind, w, h, ms.value, color, glyphPaint)
         }
         if (soft) softEdges()
     }

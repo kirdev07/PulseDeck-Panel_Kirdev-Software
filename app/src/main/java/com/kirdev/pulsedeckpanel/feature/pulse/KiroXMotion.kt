@@ -40,21 +40,10 @@ fun KiroXMotion(
 ) {
     val context = LocalContext.current
     val animate = remember { systemAnimationsEnabled(context) }
-    val ms = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(animate) {
-        if (!animate) return@LaunchedEffect
-        var start = -1L
-        while (true) {
-            withFrameNanos { now ->                   // the Compose frame clock: always schedules a redraw
-                if (start < 0) start = now
-                ms.floatValue = (now - start) / 1_000_000f
-            }
-            delay(FRAME_MS)
-        }
-    }
+    val ms = com.kirdev.pulsedeckpanel.core.ui.rememberFrameTime(animate)
     val path = remember { Path() }
     Canvas(modifier.width(width).height(height)) {
-        val phase = ms.floatValue / 135f              // read in the draw phase: only this canvas redraws
+        val phase = ms.value / 135f              // read in the draw phase: only this canvas redraws
         val amplitude = 2.3.dp.toPx()
         val centerY = size.height / 2f
         path.reset()

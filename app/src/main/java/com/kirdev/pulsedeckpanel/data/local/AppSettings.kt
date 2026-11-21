@@ -77,6 +77,8 @@ data class DisplayPrefs(
     val limits: Map<Limit, Int> = Limit.entries.associateWith { it.default },
     // Screen
     val burnIn: Boolean = true,
+    /** «eco» 30 / «smooth» 60 / «max» = the display's top rate (core/ui/Frames.kt). */
+    val frameRate: String = "smooth",
     val offlineClock: Boolean = true,
     val intervalSeconds: Double = 1.5,
     val nightMode: Boolean = false,
@@ -112,7 +114,7 @@ data class DisplayPrefs(
         put("idle", idle); put("idleSize", idleSize); put("motion", motion); put("pulse", pulse)
         put("alerts", alerts); put("notify", notify); put("alertOffline", alertOffline)
         put("limits", JSONObject().apply { limits.forEach { (k, v) -> put(k.name, v) } })
-        put("burnIn", burnIn); put("offlineClock", offlineClock); put("interval", intervalSeconds)
+        put("burnIn", burnIn); put("frameRate", frameRate); put("offlineClock", offlineClock); put("interval", intervalSeconds)
         put("night", nightMode); put("nightStart", nightStart); put("nightEnd", nightEnd)
     }
 
@@ -158,7 +160,7 @@ data class DisplayPrefs(
                 pulse = b("pulse", d.pulse),
                 alerts = b("alerts", d.alerts), notify = b("notify", d.notify), alertOffline = b("alertOffline", d.alertOffline),
                 limits = Limit.entries.associateWith { limitJson?.optInt(it.name, it.default) ?: it.default },
-                burnIn = b("burnIn", d.burnIn), offlineClock = b("offlineClock", d.offlineClock),
+                burnIn = b("burnIn", d.burnIn), frameRate = s("frameRate", d.frameRate), offlineClock = b("offlineClock", d.offlineClock),
                 intervalSeconds = json.optDouble("interval", d.intervalSeconds).takeIf { !it.isNaN() } ?: d.intervalSeconds,
                 nightMode = b("night", d.nightMode), nightStart = i("nightStart", d.nightStart), nightEnd = i("nightEnd", d.nightEnd),
             ).cleaned()
@@ -174,6 +176,11 @@ class AppSettings(context: Context) {
     var background: Boolean
         get() = prefs.getBoolean(BACKGROUND, true)
         set(value) = prefs.edit().putBoolean(BACKGROUND, value).apply()
+
+    /** The notification permission was asked once at start (Android asks at most twice, then never again). */
+    var askedNotifications: Boolean
+        get() = prefs.getBoolean(ASKED_NOTIFICATIONS, false)
+        set(value) = prefs.edit().putBoolean(ASKED_NOTIFICATIONS, value).apply()
 
     /** After the phone starts: run in the background and open the display once the phone is unlocked. */
     var openOnUnlock: Boolean
@@ -210,6 +217,7 @@ class AppSettings(context: Context) {
         const val BACKGROUND = "background"
         const val OPEN_ON_UNLOCK = "open_on_unlock"
         const val DISPLAY = "display_v2"
+        const val ASKED_NOTIFICATIONS = "asked_notifications"
         const val OLD_24H = "use_24h"
         const val OLD_CELLS = "cells"
         const val OLD_INTERVAL = "interval"

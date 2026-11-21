@@ -311,6 +311,7 @@ private fun AlertsPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) ->
         app.syncBackgroundMetrics()
         onPauseOrDispose { }
     }
+    val askNotifications = rememberNotificationAsk()
     Toggle("Подсвечивать плитку и сообщать", "Сообщение — если значение держится за порогом ~10 секунд. Диск и батарея — когда осталось меньше порога.",
         p.alerts) { on -> set { it.copy(alerts = on) } }
     if (p.alerts) {
@@ -325,10 +326,7 @@ private fun AlertsPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) ->
             "тогда показатели запрашиваются раз в 5 секунд."
         else "Android не разрешает уведомления этому приложению. Включите их в настройках приложения.",
         p.notify && allowed) { on ->
-        if (on && !allowed) {          // turned on after Android allows them (the switch shows the real state)
-            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
+        if (on && !allowed) askNotifications()          // the switch shows the real state once Android answers
         set { it.copy(notify = on) }
     }
 }
@@ -352,6 +350,12 @@ private fun ScreenPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) ->
     }
     Toggle("Без связи — только часы", "Пока ПК недоступен, на экране остаются одни часы.", p.offlineClock) { on ->
         set { it.copy(offlineClock = on) }
+    }
+    val window = (LocalContext.current as? android.app.Activity)
+    val top = com.kirdev.pulsedeckpanel.core.ui.Frames.maxRate(window?.display)
+    Panel("Частота кадров", "Как часто перерисовываются анимации. Экран телефона переключается на эту частоту: ниже — меньше расход батареи. Ночью всегда экономно.") {
+        KeyChips(listOf("eco" to "Экономно · 30", "smooth" to "Плавно · 60") + (if (top > 60) listOf("max" to "Максимум · $top Гц") else emptyList()),
+            p.frameRate) { v -> set { it.copy(frameRate = v) } }
     }
     Panel("Обновление показателей", "Реже — меньше нагрузка на ПК и телефон.") {
         val options = listOf(1.0 to "1 с", 1.5 to "1,5 с", 3.0 to "3 с", 5.0 to "5 с", 10.0 to "10 с")
@@ -384,6 +388,7 @@ private fun WorkPage(app: PanelApp) {
         onPauseOrDispose { }
     }
     val active = remember { app.pairing.load() }
+    val askNotifications = rememberNotificationAsk()
     Toggle("Работать в фоне",
         "Связь с ПК и управление музыкой из уведомления, когда приложение свёрнуто. " +
             "Показатели в фоне не запрашиваются.", background) { on ->
@@ -391,6 +396,7 @@ private fun WorkPage(app: PanelApp) {
         app.settings.background = on
         app.syncBackgroundMetrics()
         if (on) {
+            if (!AlertNotices.allowed(context)) askNotifications()      // the music controls live in a notification
             if (active != null) PanelService.start(context)
         } else {
             openOnUnlock = false
@@ -447,6 +453,31 @@ private fun PcsPage(app: PanelApp, onConnection: () -> Unit) {
     }
     Note("«Забыть» удаляет ключ с телефона. Чтобы отключить телефон и на ПК, отзовите его на экране «Телефон» в PulseDeck.",
         "Добавить ПК", onConnection)
+}
+
+/**
+ * Asks for the notification permission from a switch that needs it; when Android no longer shows
+ * the question (denied twice), opens the app's notification settings instead.
+ */
+@Composable
+private fun rememberNotificationAsk(): () -> Unit {
+    val context = LocalContext.current
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    return remember(context) {
+        {
+            val activity = context as? android.app.Activity
+            if (android.os.Build.VERSION.SDK_INT >= 33 && activity != null &&
+                (!(context.applicationContext as PanelApp).settings.askedNotifications ||
+                    activity.shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS))) {
+                (context.applicationContext as PanelApp).settings.askedNotifications = true
+                launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+    }
 }
 
 private fun <T> List<T>.swap(a: Int, b: Int): List<T> = toMutableList().also { val x = it[a]; it[a] = it[b]; it[b] = x }
