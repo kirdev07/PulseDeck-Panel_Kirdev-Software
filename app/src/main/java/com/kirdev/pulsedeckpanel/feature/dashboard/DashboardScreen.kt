@@ -157,28 +157,35 @@ fun DashboardScreen(
                 .graphicsLayer { alpha = if (night) 0.45f else 1f }     // night mode: dimmer than the lowest brightness
                 .padding(horizontal = 28.dp, vertical = 14.dp),
         ) {
-            StatusLine(state, metrics, saver, onConnection, Modifier.align(Alignment.TopStart).padding(top = 10.dp))
-            Box(Modifier.align(Alignment.TopEnd)) {
-                IconButtonSmall(PanelIcons.Settings, if (updateAvailable) "Настройки, есть обновление" else "Настройки", onClick = onSettings)
-                if (updateAvailable) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(8.dp).clip(CircleShape).background(Palette.Text))
+          Column(Modifier.fillMaxSize()) {
+            // The top line has a strip of its own (TOP_STRIP): the clock and the cards start below it.
+            Row(Modifier.fillMaxWidth().height(TOP_STRIP), verticalAlignment = Alignment.CenterVertically) {
+                StatusLine(state, metrics, saver, onConnection, Modifier.weight(1f))
+                Box {
+                    IconButtonSmall(PanelIcons.Settings, if (updateAvailable) "Настройки, есть обновление" else "Настройки", onClick = onSettings)
+                    if (updateAvailable) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(8.dp).clip(CircleShape).background(Palette.Text))
+                }
             }
             val clockTap = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
                 enabled = prefs.gestures) { nextLayout() }
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val height = maxHeight
+                val width = maxWidth
+                val hasPlayer = media != null || prefs.playerAlways
+                val hasActivity = prefs.showActivity && activity != null
                 if (saver) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        ClockBlock(prefs, sizeFor(prefs, "clock", height))
+                        ClockBlock(prefs, fitClock(prefs, "saver", width, height, false, false))
                     }
                 } else when (prefs.layout) {
                     "music" -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        ClockBlock(prefs, 34.sp, clockTap.padding(top = 4.dp), showDate = false, weight = FontWeight.Light)
+                        ClockBlock(prefs, 34.sp, clockTap, showDate = false, weight = FontWeight.Light)
                         Center(viewModel, prefs, media, coverBitmap, volume, PlayerSize.BIG, 720.dp, min(150.dp, height * 0.34f),
                             Modifier.weight(1f).fillMaxWidth(), playerExtras)
                         Tiles(prefs, metrics, volume, history, AlertMonitor.tilesOf(alerts), { detail = it }, Modifier.padding(bottom = 2.dp))
                     }
                     "monitoring" -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        ClockBlock(prefs, sizeFor(prefs, "monitoring", height), clockTap, dateSize = 13.sp)
+                        ClockBlock(prefs, fitClock(prefs, "monitoring", width, height, hasPlayer, hasActivity), clockTap, dateSize = 13.sp)
                         ActivityLine(prefs, activity)
                         if (media != null || prefs.playerAlways) {
                             Spacer(Modifier.height(6.dp))
@@ -191,8 +198,7 @@ fun DashboardScreen(
                             Modifier.weight(1f).padding(bottom = 2.dp), cards = true)
                     }
                     else -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Spacer(Modifier.height(6.dp))
-                        ClockBlock(prefs, sizeFor(prefs, prefs.layout, height), clockTap)
+                        ClockBlock(prefs, fitClock(prefs, prefs.layout, width, height, hasPlayer, hasActivity), clockTap)
                         ActivityLine(prefs, activity)
                         Center(viewModel, prefs, media, coverBitmap, volume, PlayerSize.NORMAL,
                             if (prefs.layout == "clock") 460.dp else 560.dp, PlayerSize.NORMAL.cover, Modifier.weight(1f).fillMaxWidth(),
@@ -201,6 +207,7 @@ fun DashboardScreen(
                     }
                 }
             }
+          }
         }
         AnimatedVisibility(toast != null, Modifier.align(Alignment.BottomCenter).padding(bottom = 76.dp), enter = fadeIn(), exit = fadeOut()) {
             Text(toast.orEmpty(), fontSize = 13.sp, color = Palette.Text, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -212,10 +219,33 @@ fun DashboardScreen(
 }
 
 /** The clock of each layout: the chosen size; bigger in «Часы», smaller in «Мониторинг». */
-private fun sizeFor(prefs: DisplayPrefs, layout: String, height: Dp) = when (layout) {
-    "clock" -> minOf(clockSize(prefs).value * 1.6f, height.value * 0.46f).sp
-    "monitoring" -> minOf(64f, height.value * 0.16f).sp
-    else -> minOf(clockSize(prefs).value, height.value * (if (prefs.tiles.size > 5) 0.26f else 0.32f)).sp
+/** Height of the top line (PC, uptime, battery, settings); the layouts start below it. */
+private val TOP_STRIP = 40.dp
+
+/**
+ * The clock of each layout: the chosen size (bigger in «Часы», smaller in «Мониторинг»), but
+ * never taller than the room the rest of the layout leaves — the date, «Сейчас на ПК», the
+ * player at its full height and the tiles — so nothing runs into anything.
+ */
+private fun fitClock(prefs: DisplayPrefs, layout: String, width: Dp, height: Dp, player: Boolean, activity: Boolean): androidx.compose.ui.unit.TextUnit {
+    val wanted = when (layout) {
+        "clock", "saver" -> clockSize(prefs).value * 1.6f
+        "monitoring" -> 64f
+        else -> clockSize(prefs).value
+    }
+    if (layout == "saver") return minOf(wanted, height.value * 0.7f).sp
+    val perRow = ((width.value + 24) / (if (layout == "monitoring") 170f else 150f)).toInt().coerceAtLeast(1)
+    val tiles = prefs.shownTiles.size
+    val rows = if (prefs.tileRows == "scroll" && layout != "monitoring") 1 else (tiles + perRow - 1) / perRow
+    val used = (if (prefs.showDate) 24f else 0f) + (if (activity) 22f else 0f) +
+        when (layout) {
+            "monitoring" -> (if (player) 82f else 0f) + rows * 78f + 20f      // small player, tile cards
+            else -> (if (player) 112f else 40f) + rows * 54f + 8f            // the full player card, tile rows
+        }
+    // A clock line is about 1.2 × its font size tall (seconds sit beside, not above).
+    val room = ((height.value - used) / 1.2f).coerceAtLeast(28f)
+    val byWidth = width.value / (if (prefs.use24h) 3.1f else 4.6f) / (if (prefs.seconds) 1.25f else 1f)   // «00:00» fits across
+    return minOf(wanted, room, byWidth).sp
 }
 
 /** Between the clock and the tiles: the player, or the idle animation when nothing plays. */
