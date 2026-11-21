@@ -9,6 +9,8 @@ import com.kirdev.pulsedeckpanel.data.model.ConnectionState
 import com.kirdev.pulsedeckpanel.data.model.MediaSession
 import com.kirdev.pulsedeckpanel.data.model.Metrics
 import com.kirdev.pulsedeckpanel.data.model.PairedPc
+import com.kirdev.pulsedeckpanel.data.model.PcActivity
+import com.kirdev.pulsedeckpanel.data.model.Player
 import com.kirdev.pulsedeckpanel.data.model.SystemVolume
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +52,20 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
     private val _volume = MutableStateFlow<SystemVolume?>(null)
     val volume: StateFlow<SystemVolume?> = _volume.asStateFlow()
 
+    private val _players = MutableStateFlow<List<Player>>(emptyList())
+    /** Players the PC offers («Источник музыки»); empty with PulseDeck before 1.0.4. */
+    val players: StateFlow<List<Player>> = _players.asStateFlow()
+
+    private val _activity = MutableStateFlow<PcActivity?>(null)
+    val activity: StateFlow<PcActivity?> = _activity.asStateFlow()
+
+    private val _source = MutableStateFlow("")
+    /** The chosen player ("" = automatic); sent again after every reconnection. */
+    val source: StateFlow<String> = _source.asStateFlow()
+
+    /** Warnings with notifications on: metrics keep coming (slower) while the app is in the background. */
+    @Volatile private var backgroundMetrics = false
+
     private var job: Job? = null
     @Volatile private var interval = 1.5
     @Volatile private var socket: WebSocket? = null
@@ -80,13 +96,32 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
     /** Seconds between metric updates (Settings); applied to the live session at once. */
     fun setInterval(seconds: Double) {
         interval = seconds
-        socket?.send(Protocol.subscribe(metrics = uiVisible, interval = seconds))
+        socket?.send(subscription())
     }
 
     fun setUiVisible(visible: Boolean) {
         uiVisible = visible
-        socket?.send(Protocol.subscribe(metrics = visible, interval = interval))
-        if (!visible) _metrics.value = null      // not refreshed in the background: never show stale numbers
+        socket?.send(subscription())
+        if (!visible && !backgroundMetrics) _metrics.value = null      // not refreshed: never show stale numbers
+    }
+
+    /** «Предупреждения» with system notifications: watch the PC also while the app is in the background. */
+    fun setBackgroundMetrics(on: Boolean) {
+        if (backgroundMetrics == on) return
+        backgroundMetrics = on
+        socket?.send(subscription())
+    }
+
+    private fun subscription(): String = when {
+        uiVisible -> Protocol.subscribe(metrics = true, interval = interval)
+        backgroundMetrics -> Protocol.subscribe(metrics = true, interval = maxOf(interval, BACKGROUND_INTERVAL))
+        else -> Protocol.subscribe(metrics = false, interval = interval)
+    }
+
+    /** Follow this player ("" = automatic, as the PC decides). */
+    fun chooseSource(id: String) {
+        _source.value = id
+        socket?.send(Protocol.command("source", id))
     }
 
     fun start() {
@@ -105,7 +140,7 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
     }
 
     /** Playback command; returns false when there is no live connection. */
-    fun send(action: String, value: Number? = null): Boolean = socket?.send(Protocol.command(action, value)) ?: false
+    fun send(action: String, value: Any? = null): Boolean = socket?.send(Protocol.command(action, value)) ?: false
 
     /** After a new pairing or when the user leaves the connection screen. */
     fun restart() {
@@ -172,7 +207,8 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
                 when (val message = Protocol.parse(text, SystemClock.elapsedRealtime())) {
                     is Protocol.Message.Hello -> {
                         sessionConnected = true
-                        webSocket.send(Protocol.subscribe(metrics = uiVisible, interval = interval))
+                        webSocket.send(subscription())
+                        if (_source.value.isNotEmpty()) webSocket.send(Protocol.command("source", _source.value))
                         _state.value = ConnectionState.Connected(pc, message.pcName.ifBlank { pc.name }, usb)
                     }
                     is Protocol.Message.MetricsUpdate -> _metrics.value = message.metrics
@@ -180,6 +216,12 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
                         _volume.value = message.volume
                         onMedia(message.session, host, pc.port, token, http)
                     }
+                    is Protocol.Message.Sessions -> {
+                        _players.value = message.players
+                        // The chosen app stopped playing and left the list: back to automatic.
+                        if (_source.value.isNotEmpty() && message.players.none { it.id == _source.value }) chooseSource("")
+                    }
+                    is Protocol.Message.Activity -> _activity.value = message.activity
                     is Protocol.Message.Error -> Log.i(TAG, "PC: ${message.code}")      // never log tokens
                     else -> Unit
                 }
@@ -261,6 +303,8 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
     }
 
     private fun clearData() {
+        _players.value = emptyList()
+        _activity.value = null
         _volume.value = null
         _metrics.value = null
         _media.value = null
@@ -271,6 +315,7 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
         const val TAG = "PanelConnection"
         const val LOOPBACK = "127.0.0.1"
         const val USB_CHECK_MS = 5_000L
+        const val BACKGROUND_INTERVAL = 5.0
 
         /** Covers are shown at ~80 dp; decode small to save memory on a 3 GB phone. */
         fun decodeCover(bytes: ByteArray): Bitmap? {

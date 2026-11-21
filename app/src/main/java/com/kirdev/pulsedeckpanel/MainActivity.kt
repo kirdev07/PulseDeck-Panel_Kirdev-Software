@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {                       // «Обновление показателей» applies to the live link
             app.settings.display.collect {
                 app.connection.setInterval(it.intervalSeconds)
+                app.syncBackgroundMetrics()
                 Palette.apply(it, minuteOfDay())
             }
         }

@@ -100,7 +100,7 @@ fun SettingsScreen(app: PanelApp, onBack: () -> Unit, onConnection: () -> Unit) 
                         null -> Main(app, display, set) { page = it }
                         Page.LOOK -> Look(display, set)
                         Page.CLOCK -> ClockPage(display, set)
-                        Page.PLAYER -> PlayerPage(display, set)
+                        Page.PLAYER -> PlayerPage(app, display, set)
                         Page.TILES -> TilesPage(app, display, set)
                         Page.ALERTS -> AlertsPage(display, set)
                         Page.MOTION -> MotionPage(display, set)
@@ -168,7 +168,7 @@ private fun Main(app: PanelApp, p: DisplayPrefs, set: ((DisplayPrefs) -> Display
 @Composable
 private fun Look(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) -> Unit) {
     Panel("Тема", "Тёмная — для AMOLED и ночи, белая — для светлой комнаты.") {
-        KeyChips(listOf("DARK" to "Тёмная", "LIGHT" to "Белая"), p.theme) { v -> set { it.copy(theme = v) } }
+        KeyChips(listOf("DARK" to "Тёмная", "LIGHT" to "Белая"), p.theme) { v -> set { it.copy(theme = v, themeByTime = false) } }
     }
     Toggle("Белая днём, тёмная вечером", "Тема меняется сама в заданное время.", p.themeByTime) { on -> set { it.copy(themeByTime = on) } }
     if (p.themeByTime) {
@@ -233,10 +233,23 @@ private fun ClockPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) -> 
     Toggle("24 часа", "Иначе — 12-часовой: 9:41 PM вместо 21:41.", p.use24h) { on -> set { it.copy(use24h = on) } }
     Toggle("Секунды", "", p.seconds) { on -> set { it.copy(seconds = on) } }
     Toggle("Дата", "", p.showDate) { on -> set { it.copy(showDate = on) } }
+    Toggle("Что сейчас открыто на ПК", "Под датой: приложение на переднем плане и его окно (PulseDeck 1.0.4 и новее).",
+        p.showActivity) { on -> set { it.copy(showActivity = on) } }
 }
 
 @Composable
-private fun PlayerPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) -> Unit) {
+private fun PlayerPage(app: PanelApp, p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) -> Unit) {
+    val players by app.connection.players.collectAsStateWithLifecycle()
+    val source by app.connection.source.collectAsStateWithLifecycle()
+    Panel("Источник музыки", if (players.isEmpty())
+        "Список приложений с музыкой приходит с ПК (PulseDeck 1.0.4 и новее), когда ПК на связи."
+        else "Чей трек показывать. «Автоматически» — что сейчас играет на ПК. То же — по тапу на название приложения в плеере.") {
+        if (players.isNotEmpty()) {
+            KeyChips(listOf("" to "Автоматически") + players.map {
+                it.id to (if (it.title.isNotBlank()) "${it.source} — ${it.title}".take(48) else it.source)
+            }, source) { app.connection.chooseSource(it) }
+        }
+    }
     Toggle("Показывать, даже когда ничего не играет", "", p.playerAlways) { on -> set { it.copy(playerAlways = on) } }
     Toggle("Обложка", "", p.showCover) { on -> set { it.copy(showCover = on) } }
     Toggle("Полоса времени", "", p.showProgress) { on -> set { it.copy(showProgress = on) } }
@@ -257,7 +270,7 @@ private fun TilesPage(app: PanelApp, p: DisplayPrefs, set: ((DisplayPrefs) -> Di
             val on = tile in p.tiles
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Palette.Surface2)
-                    .clickable { set { it.copy(tiles = if (on) it.tiles - tile else it.tiles + tile) } }
+                    .clickable(enabled = !on || p.tiles.size > 1) { set { it.copy(tiles = if (on) it.tiles - tile else it.tiles + tile) } }
                     .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -292,8 +305,10 @@ private fun TilesPage(app: PanelApp, p: DisplayPrefs, set: ((DisplayPrefs) -> Di
 private fun AlertsPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) -> Unit) {
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(AlertNotices.allowed(context)) }
+    val app = LocalContext.current.applicationContext as PanelApp
     LifecycleResumeEffect(Unit) {
         allowed = AlertNotices.allowed(context)
+        app.syncBackgroundMetrics()
         onPauseOrDispose { }
     }
     Toggle("Подсвечивать плитку и сообщать", "Сообщение — если значение держится за порогом ~10 секунд. Диск и батарея — когда осталось меньше порога.",
@@ -306,10 +321,11 @@ private fun AlertsPage(p: DisplayPrefs, set: ((DisplayPrefs) -> DisplayPrefs) ->
     Toggle("Сообщать, если пропала связь с ПК", "Через 30 секунд без связи.", p.alertOffline) { on -> set { it.copy(alertOffline = on) } }
     Section("Уведомления")
     Toggle("Системные уведомления",
-        if (allowed) "Предупреждения приходят и в шторку телефона, пока открыт PulseDeck Panel."
+        if (allowed) "Предупреждения приходят и в шторку телефона. С «Работать в фоне» — и когда приложение свёрнуто: " +
+            "тогда показатели запрашиваются раз в 5 секунд."
         else "Android не разрешает уведомления этому приложению. Включите их в настройках приложения.",
         p.notify && allowed) { on ->
-        if (on && !allowed) {
+        if (on && !allowed) {          // turned on after Android allows them (the switch shows the real state)
             context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
@@ -373,6 +389,7 @@ private fun WorkPage(app: PanelApp) {
             "Показатели в фоне не запрашиваются.", background) { on ->
         background = on
         app.settings.background = on
+        app.syncBackgroundMetrics()
         if (on) {
             if (active != null) PanelService.start(context)
         } else {

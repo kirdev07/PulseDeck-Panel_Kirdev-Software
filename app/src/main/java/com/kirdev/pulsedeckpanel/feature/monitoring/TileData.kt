@@ -116,13 +116,13 @@ data class History(val series: Map<String, List<Double?>> = emptyMap()) {
  * makes its tile glow; it is armed again once the value is 5 points back on the safe side.
  */
 class AlertMonitor {
-    private val count = mutableMapOf<Limit, Int>()
+    private val since = mutableMapOf<Limit, Long>()        // when the value went past its limit
     private val active = mutableSetOf<Limit>()
 
     val activeLimits: Set<Limit> get() = active.toSet()
 
-    /** Returns the texts of new warnings (empty most of the time). */
-    fun check(m: Metrics, prefs: DisplayPrefs, intervalSeconds: Double): List<Pair<Limit, String>> {
+    /** Returns the texts of new warnings (empty most of the time). [nowMs]: a monotonic clock. */
+    fun check(m: Metrics, prefs: DisplayPrefs, nowMs: Long): List<Pair<Limit, String>> {
         val disk = if (prefs.disk.isBlank()) m.disks.minByOrNull { if (it.total > 0) it.free.toDouble() / it.total else 1.0 }
             else chosenDisk(m, prefs.disk)
         val values = mapOf(
@@ -130,15 +130,15 @@ class AlertMonitor {
             Limit.DISK to disk?.takeIf { it.total > 0 }?.let { 100.0 * it.free / it.total },
             Limit.BATTERY to m.battery?.takeIf { !it.plugged }?.percent,
         )
-        val needed = kotlin.math.ceil(ALERT_SECONDS / intervalSeconds.coerceAtLeast(1.0)).toInt().coerceAtLeast(2)
         val fresh = mutableListOf<Pair<Limit, String>>()
         for (key in Limit.entries) {
             val limit = prefs.limit(key)
             val value = values[key]
             val bad = prefs.alerts && value != null && (if (key.over) value >= limit else value <= limit)
             val fine = value == null || (if (key.over) value < limit - 5 else value > limit + 5)
-            count[key] = if (bad) (count[key] ?: 0) + 1 else 0
-            if (key !in active && (count[key] ?: 0) >= needed) {
+            if (!bad) since.remove(key) else if (key !in since) since[key] = nowMs
+            val held = since[key]?.let { nowMs - it >= (ALERT_SECONDS * 1000).toLong() } ?: false
+            if (key !in active && held) {
                 active += key
                 val v = value!!.roundToInt()
                 fresh += key to when (key) {
@@ -154,7 +154,7 @@ class AlertMonitor {
     }
 
     fun reset() {
-        count.clear()
+        since.clear()
         active.clear()
     }
 

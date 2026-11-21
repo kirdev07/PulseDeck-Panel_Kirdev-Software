@@ -48,6 +48,19 @@ class ProtocolTest {
         assertNull((Protocol.parse("""{"type":"media","session":null}""", 0) as Protocol.Message.MediaUpdate).session)
     }
 
+    @Test fun playersActivityAndSourceCommand() {
+        val sessions = Protocol.parse("""{"type":"sessions","items":[{"id":"pulse","source":"PulseDeck","title":"A","status":"playing"},
+            {"id":"","source":"bad"}]}""", 0) as Protocol.Message.Sessions
+        assertEquals(listOf("pulse"), sessions.players.map { it.id })
+        val activity = Protocol.parse("""{"type":"activity","app":"Chrome","title":"YouTube","fullscreen":true}""", 0)
+            as Protocol.Message.Activity
+        assertEquals("Chrome", activity.activity!!.app)
+        assertTrue(activity.activity!!.fullscreen)
+        assertNull((Protocol.parse("""{"type":"activity","app":null}""", 0) as Protocol.Message.Activity).activity)
+        val json = org.json.JSONObject(Protocol.command("source", "pulse"))
+        assertEquals("pulse", json.getString("value"))
+    }
+
     @Test fun unknownAndBrokenMessagesAreIgnored() {
         assertEquals(Protocol.Message.Unknown, Protocol.parse("""{"type":"future"}""", 0))
         assertEquals(Protocol.Message.Unknown, Protocol.parse("not json", 0))
@@ -128,15 +141,14 @@ class FormatTest {
         val monitor = AlertMonitor()
         val prefs = DisplayPrefs()
         val hot = metrics(cpu = 95.0)
-        assertTrue(monitor.check(hot, prefs, 2.0).isEmpty())
-        repeat(3) { monitor.check(hot, prefs, 2.0) }
-        val fired = monitor.check(hot, prefs, 2.0)
+        for (t in 0L..8_000L step 2_000L) assertTrue(monitor.check(hot, prefs, t).isEmpty())   // 8 s: not yet
+        val fired = monitor.check(hot, prefs, 10_000)
         assertEquals(listOf(Limit.CPU), fired.map { it.first })
         assertTrue(fired[0].second.contains("95%"))
-        assertTrue(monitor.check(hot, prefs, 2.0).isEmpty())              // once, not every sample
-        monitor.check(metrics(cpu = 88.0), prefs, 2.0)                    // within 5 points: still active
+        assertTrue(monitor.check(hot, prefs, 12_000).isEmpty())           // once, not every sample
+        monitor.check(metrics(cpu = 88.0), prefs, 14_000)                 // within 5 points: still active
         assertTrue(Limit.CPU in monitor.activeLimits)
-        monitor.check(metrics(cpu = 40.0), prefs, 2.0)
+        monitor.check(metrics(cpu = 40.0), prefs, 16_000)
         assertFalse(Limit.CPU in monitor.activeLimits)
         assertTrue(AlertMonitor.tilesOf(setOf(Limit.CPU)).contains(Tile.CORES))
     }

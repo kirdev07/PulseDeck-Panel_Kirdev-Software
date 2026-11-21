@@ -45,7 +45,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -60,6 +63,8 @@ import com.kirdev.pulsedeckpanel.data.local.DisplayPrefs
 import com.kirdev.pulsedeckpanel.data.local.Tile
 import com.kirdev.pulsedeckpanel.data.model.ConnectionState
 import com.kirdev.pulsedeckpanel.data.model.Metrics
+import com.kirdev.pulsedeckpanel.data.model.PcActivity
+import com.kirdev.pulsedeckpanel.data.model.Player
 import com.kirdev.pulsedeckpanel.feature.clock.ClockBlock
 import com.kirdev.pulsedeckpanel.feature.clock.clockSize
 import com.kirdev.pulsedeckpanel.feature.clock.rememberMinuteClock
@@ -94,6 +99,10 @@ fun DashboardScreen(
     val alerts by viewModel.alerts.collectAsStateWithLifecycle()
     val volume by viewModel.volume.collectAsStateWithLifecycle()
     val prefs by viewModel.display.collectAsStateWithLifecycle()
+    val players by viewModel.players.collectAsStateWithLifecycle()
+    val source by viewModel.source.collectAsStateWithLifecycle()
+    val activity by viewModel.activity.collectAsStateWithLifecycle()
+    val playerExtras = PlayerExtras(players, source, viewModel::chooseSource)
     val night = prefs.isNight(rememberMinuteClock().hour)
     val shift = rememberBurnInShift()
     NightBrightness(night)
@@ -165,15 +174,17 @@ fun DashboardScreen(
                     "music" -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                         ClockBlock(prefs, 34.sp, clockTap.padding(top = 4.dp), showDate = false, weight = FontWeight.Light)
                         Center(viewModel, prefs, media, coverBitmap, volume, PlayerSize.BIG, 720.dp, min(150.dp, height * 0.34f),
-                            Modifier.weight(1f).fillMaxWidth())
+                            Modifier.weight(1f).fillMaxWidth(), playerExtras)
                         Tiles(prefs, metrics, volume, history, AlertMonitor.tilesOf(alerts), { detail = it }, Modifier.padding(bottom = 2.dp))
                     }
                     "monitoring" -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                         ClockBlock(prefs, sizeFor(prefs, "monitoring", height), clockTap, dateSize = 13.sp)
+                        ActivityLine(prefs, activity)
                         if (media != null || prefs.playerAlways) {
                             Spacer(Modifier.height(6.dp))
                             CompactPlayer(media, coverBitmap, volume, prefs, viewModel::command, Modifier.widthIn(max = 460.dp),
-                                PlayerSize.SMALL, viewModel::toast)
+                                PlayerSize.SMALL, viewModel::toast, players = players, source = source,
+                                onSource = viewModel::chooseSource)
                         }
                         Spacer(Modifier.height(10.dp))
                         Tiles(prefs, metrics, volume, history, AlertMonitor.tilesOf(alerts), { detail = it },
@@ -182,8 +193,10 @@ fun DashboardScreen(
                     else -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Spacer(Modifier.height(6.dp))
                         ClockBlock(prefs, sizeFor(prefs, prefs.layout, height), clockTap)
+                        ActivityLine(prefs, activity)
                         Center(viewModel, prefs, media, coverBitmap, volume, PlayerSize.NORMAL,
-                            if (prefs.layout == "clock") 460.dp else 560.dp, PlayerSize.NORMAL.cover, Modifier.weight(1f).fillMaxWidth())
+                            if (prefs.layout == "clock") 460.dp else 560.dp, PlayerSize.NORMAL.cover, Modifier.weight(1f).fillMaxWidth(),
+                            playerExtras)
                         Tiles(prefs, metrics, volume, history, AlertMonitor.tilesOf(alerts), { detail = it }, Modifier.padding(bottom = 2.dp))
                     }
                 }
@@ -202,7 +215,7 @@ fun DashboardScreen(
 private fun sizeFor(prefs: DisplayPrefs, layout: String, height: Dp) = when (layout) {
     "clock" -> minOf(clockSize(prefs).value * 1.6f, height.value * 0.46f).sp
     "monitoring" -> minOf(64f, height.value * 0.16f).sp
-    else -> minOf(clockSize(prefs).value, height.value * 0.36f).sp
+    else -> minOf(clockSize(prefs).value, height.value * (if (prefs.tiles.size > 5) 0.26f else 0.32f)).sp
 }
 
 /** Between the clock and the tiles: the player, or the idle animation when nothing plays. */
@@ -217,6 +230,7 @@ private fun Center(
     maxWidth: Dp,
     coverSize: Dp,
     modifier: Modifier,
+    extras: PlayerExtras,
 ) {
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val room = this
@@ -227,8 +241,10 @@ private fun Center(
             label = "player-or-idle",
         ) { (player, _) ->
             if (player) {
-                CompactPlayer(media, cover, volume, prefs, viewModel::command, Modifier.widthIn(max = maxWidth), size,
-                    viewModel::toast, coverSize)
+                // Not enough height for the chosen card (many tiles, a big clock): the compact one.
+                val fits = if (room.maxHeight < 118.dp) PlayerSize.SMALL else size
+                CompactPlayer(media, cover, volume, prefs, viewModel::command, Modifier.widthIn(max = maxWidth), fits,
+                    viewModel::toast, if (fits == size) coverSize else fits.cover, extras.players, extras.source, extras.onSource)
             } else if (prefs.idle != "none" && Idle.exists(prefs.idle)) {
                 val (w, h) = idleBox(prefs, room.maxWidth, room.maxHeight)
                 IdleAnimation(prefs.idle, Palette.Accent, still = !prefs.motion, modifier = Modifier.width(w).height(h))
@@ -237,6 +253,25 @@ private fun Center(
             }
         }
     }
+}
+
+/** The PC's players and the chosen one, for the source menu of the player card. */
+private class PlayerExtras(val players: List<Player>, val source: String, val onSource: (String) -> Unit)
+
+/** «Сейчас на ПК» under the date: the app in front and its window. */
+@Composable
+private fun ActivityLine(prefs: DisplayPrefs, activity: PcActivity?) {
+    if (!prefs.showActivity || activity == null) return
+    val title = activity.title.takeIf { it.isNotBlank() && it != activity.app }?.let { " — $it" }.orEmpty()
+    Text(
+        buildAnnotatedString {
+            append(if (activity.fullscreen) "На весь экран: " else "Сейчас на ПК: ")
+            withStyle(SpanStyle(color = Palette.Text2, fontWeight = FontWeight.Medium)) { append(activity.app) }
+            append(title)
+        },
+        fontSize = 13.sp, color = Palette.Text3, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.widthIn(max = 560.dp).padding(top = 4.dp),
+    )
 }
 
 /** «Размер анимации»: about the player's width, almost the whole width, or all the free space. */

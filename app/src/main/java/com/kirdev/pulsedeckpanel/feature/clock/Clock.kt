@@ -86,6 +86,8 @@ fun ClockBlock(
         Row(verticalAlignment = Alignment.Top) {
             Text(
                 time + suffix,
+                maxLines = 1,
+                softWrap = false,
                 style = TextStyle(
                     color = Palette.Clock,
                     fontSize = size,

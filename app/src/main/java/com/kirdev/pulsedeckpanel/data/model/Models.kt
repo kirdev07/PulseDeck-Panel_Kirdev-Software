@@ -73,6 +73,12 @@ data class PairedPc(val id: String, val name: String, val host: String, val port
     }
 }
 
+/** A player on the PC the panel can follow (the built-in one or a media session of an app). */
+data class Player(val id: String, val source: String, val title: String, val status: String)
+
+/** «Сейчас на ПК»: the app in front, its window title, whether it fills the screen. */
+data class PcActivity(val app: String, val title: String, val fullscreen: Boolean)
+
 /** PC speaker volume as reported with every media update; null without pycaw on the PC. */
 data class SystemVolume(val level: Int, val muted: Boolean)
 

@@ -101,12 +101,20 @@ fun IdleAnimation(kind: String, color: Color, still: Boolean, modifier: Modifier
     val animate = remember { systemAnimationsEnabled(context) } && !still
     val ms = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(animate, kind) {
-        if (!animate) { ms.floatValue = 0f; return@LaunchedEffect }
+        if (!animate) {
+            ms.floatValue = 0f
+            while (kind == "seconds") {           // real seconds, even with animations off: once a second
+                ms.floatValue += 1f
+                delay(1000L - System.currentTimeMillis() % 1000)
+            }
+            return@LaunchedEffect
+        }
         var start = -1L
         while (true) {
             withFrameNanos { now ->
                 if (start < 0) start = now - (ms.floatValue * 1_000_000).toLong()
-                ms.floatValue = (now - start) / 1_000_000f
+                // Wrapped every hour: a Float of hours of milliseconds would make the motion jitter.
+                ms.floatValue = (((now - start) / 1_000_000L) % 3_600_000L).toFloat()
             }
             delay(33)
         }

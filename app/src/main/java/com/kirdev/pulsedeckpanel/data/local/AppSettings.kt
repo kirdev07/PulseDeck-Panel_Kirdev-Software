@@ -45,6 +45,7 @@ data class DisplayPrefs(
     val use24h: Boolean = true,
     val seconds: Boolean = false,
     val showDate: Boolean = true,
+    val showActivity: Boolean = true,
     val clockColor: String = "ink",
     val clockFont: String = "system",
     val clockWeight: String = "thin",
@@ -102,7 +103,7 @@ data class DisplayPrefs(
         put("theme", theme); put("themeByTime", themeByTime); put("dayFrom", dayFrom); put("dayTo", dayTo)
         put("accent", accent); put("bgDark", bgDark); put("bgLight", bgLight); put("uiFont", uiFont)
         put("coverColors", coverColors); put("coverBackdrop", coverBackdrop)
-        put("use24h", use24h); put("seconds", seconds); put("showDate", showDate); put("clockColor", clockColor)
+        put("use24h", use24h); put("seconds", seconds); put("showDate", showDate); put("showActivity", showActivity); put("clockColor", clockColor)
         put("clockFont", clockFont); put("clockWeight", clockWeight); put("clockSize", clockSize)
         put("layout", layout); put("tiles", JSONArray(tiles.map { it.name })); put("tileOrder", JSONArray(tileOrder.map { it.name }))
         put("disk", disk); put("tileRows", tileRows); put("sparks", sparks)
@@ -144,6 +145,7 @@ data class DisplayPrefs(
                 uiFont = s("uiFont", d.uiFont), coverColors = b("coverColors", d.coverColors),
                 coverBackdrop = b("coverBackdrop", d.coverBackdrop),
                 use24h = b("use24h", d.use24h), seconds = b("seconds", d.seconds), showDate = b("showDate", d.showDate),
+                showActivity = b("showActivity", d.showActivity),
                 clockColor = s("clockColor", d.clockColor), clockFont = s("clockFont", d.clockFont),
                 clockWeight = s("clockWeight", d.clockWeight), clockSize = s("clockSize", d.clockSize),
                 layout = s("layout", d.layout), tiles = tiles("tiles", d.tiles), tileOrder = tiles("tileOrder", d.tileOrder),

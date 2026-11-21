@@ -94,8 +94,10 @@ fun Tiles(
     fun one(tile: Tile, cellModifier: Modifier) {
         if (tile == Tile.DISK && rotate) {
             RotatingDisk(disks.size, cellModifier) { index ->
-                TileCell(tileView(tile, metrics, volume, disks[index]), history, prefs.sparks, tile in glowing, cards,
-                    dots = disks.size to index, onOpen = onOpen, modifier = Modifier)
+                // A drive pulled out mid-animation: the leaving page may ask for an index that is gone.
+                val disk = disks.getOrNull(index) ?: disks.last()
+                TileCell(tileView(tile, metrics, volume, disk), history, prefs.sparks, tile in glowing, cards,
+                    dots = disks.size to index.coerceAtMost(disks.lastIndex), onOpen = onOpen, modifier = Modifier)
             }
         } else {
             TileCell(tileView(tile, metrics, volume, chosenDisk(metrics, prefs.disk)), history, prefs.sparks,
@@ -121,7 +123,8 @@ fun Tiles(
                     }
                 }
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val rows = if (tiles.size > perRow) tiles.chunked((tiles.size + 1) / 2) else listOf(tiles)
+                val rowCount = (tiles.size + perRow - 1) / perRow
+                val rows = tiles.chunked((tiles.size + rowCount - 1) / rowCount)
                 for (row in rows) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         row.forEachIndexed { index, tile ->
@@ -143,6 +146,7 @@ private fun Divider() = Box(Modifier.padding(horizontal = 10.dp).width(1.dp).hei
 private fun RotatingDisk(count: Int, modifier: Modifier, content: @Composable (Int) -> Unit) {
     var index by remember { mutableIntStateOf(0) }
     LaunchedEffect(count) {
+        index = index.coerceIn(0, (count - 1).coerceAtLeast(0))
         while (count > 1) {
             delay(5_000)
             index = (index + 1) % count
@@ -195,7 +199,7 @@ private fun TileCell(
                 overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(if (card) 6.dp else 3.dp))
             if (view.bar) ThinProgress(view.fraction ?: 0f, Modifier.fillMaxWidth(), if (alert) Palette.Warn else Palette.Accent)
-            if (view.cores.isNotEmpty()) CoreStrip(view.cores, Modifier.fillMaxWidth().height(if (card) 40.dp else 14.dp))
+            if (view.cores.isNotEmpty()) CoreStrip(view.cores, Modifier.fillMaxWidth().height(if (card) 24.dp else 14.dp))
             // Graphs only in the big cards of «Мониторинг»; the bottom row of the panel stays clean.
             if (card && sparks && series != null) {
                 Spacer(Modifier.height(4.dp))

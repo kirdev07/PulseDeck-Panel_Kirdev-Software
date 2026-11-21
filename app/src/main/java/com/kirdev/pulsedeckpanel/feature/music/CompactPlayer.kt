@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,6 +68,7 @@ import com.kirdev.pulsedeckpanel.core.utils.Format
 import com.kirdev.pulsedeckpanel.data.local.DisplayPrefs
 import com.kirdev.pulsedeckpanel.data.model.MediaSession
 import com.kirdev.pulsedeckpanel.data.model.PlayStatus
+import com.kirdev.pulsedeckpanel.data.model.Player
 import com.kirdev.pulsedeckpanel.data.model.SystemVolume
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -94,10 +97,13 @@ fun CompactPlayer(
     size: PlayerSize = PlayerSize.NORMAL,
     onToast: (String) -> Unit = {},
     coverSize: Dp = size.cover,
+    players: List<Player> = emptyList(),
+    source: String = "",
+    onSource: (String) -> Unit = {},
 ) {
     // Position moves locally between PC updates; ticks only while playing (2×/s is enough for a bar).
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(session?.status, session?.receivedAt) {
+    LaunchedEffect(session?.status, session?.receivedAt, prefs.waveSeek) {
         while (session?.status == PlayStatus.PLAYING) {
             now = SystemClock.elapsedRealtime()
             delay(if (prefs.waveSeek) 250 else 500)
@@ -168,8 +174,8 @@ fun CompactPlayer(
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (prefs.nowPlaying && playing) {
-                    NowPlayingBars(prefs.motion, Modifier.size(if (size == PlayerSize.BIG) 22.dp else 16.dp, if (size == PlayerSize.BIG) 20.dp else 14.dp))
+                if (prefs.nowPlaying && playing && prefs.motion) {
+                    NowPlayingBars(true, Modifier.size(if (size == PlayerSize.BIG) 22.dp else 16.dp, if (size == PlayerSize.BIG) 20.dp else 14.dp))
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(session?.title ?: "Ничего не играет", fontSize = size.title, fontWeight = FontWeight.SemiBold,
@@ -181,10 +187,13 @@ fun CompactPlayer(
                     Text(session.artist, fontSize = size.meta, color = Palette.Text2, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
-                if (session.source.isNotBlank()) {
-                    Text((if (session.artist.isNotBlank()) "  ·  " else "") + session.source.uppercase(),
-                        fontSize = 10.sp, letterSpacing = 1.sp, color = Palette.Text3, maxLines = 1)
+                if (session.source.isNotBlank() || players.size > 1) {
+                    SourceLabel((if (session.artist.isNotBlank()) "  ·  " else "") + session.source.uppercase(),
+                        players, source, onSource)
                 }
+            }
+            if (session == null && players.isNotEmpty()) {
+                SourceLabel("ВЫБРАТЬ ИСТОЧНИК", players, source, onSource)
             }
             if (session != null && prefs.showProgress && session.duration > 0) {
                 Spacer(Modifier.height(if (size == PlayerSize.SMALL) 2.dp else 8.dp))
@@ -217,6 +226,45 @@ fun CompactPlayer(
             }
             if (volume != null && prefs.showVolume && !small) {
                 VolumeRow(gestureVolume?.let { SystemVolume(it, false) } ?: volume) { onCommand("volume", it) }
+            }
+        }
+    }
+}
+
+/**
+ * Which app is playing; with several players on the PC a tap opens the list
+ * («Автоматически» = the PC decides, as before).
+ */
+@Composable
+private fun SourceLabel(text: String, players: List<Player>, source: String, onSource: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val choosable = players.isNotEmpty()
+    Box {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            modifier = if (choosable) Modifier.clip(RoundedCornerShape(6.dp)).clickable { open = true } else Modifier) {
+            Text(text, fontSize = 10.sp, letterSpacing = 1.sp, color = Palette.Text3, maxLines = 1)
+            if (choosable) Icon(PanelIcons.Down, contentDescription = "Выбрать источник музыки", tint = Palette.Text3,
+                modifier = Modifier.size(14.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Palette.Surface2) {
+            val items = listOf(Player("", "Автоматически", "", "")) + players
+            for (player in items) {
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(player.source, fontSize = 14.sp, color = Palette.Text)
+                            if (player.title.isNotBlank()) Text(player.title, fontSize = 12.sp, color = Palette.Text3, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                        }
+                    },
+                    leadingIcon = {
+                        Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                            if (player.id == source) Icon(PanelIcons.Check, contentDescription = null, tint = Palette.Accent,
+                                modifier = Modifier.size(18.dp))
+                        }
+                    },
+                    onClick = { open = false; onSource(player.id) },
+                )
             }
         }
     }
@@ -255,20 +303,22 @@ private fun SeekBar(
     motion: Boolean = true,
 ) {
     var current by remember { mutableFloatStateOf(0f) }
+    val seekNow by rememberUpdatedState(onSeek)
+    val dragNow by rememberUpdatedState(onDrag)
     Box(
         Modifier.fillMaxWidth().height(24.dp)
             .pointerInput(Unit) {
-                detectTapGestures { onSeek((it.x / size.width).coerceIn(0f, 1f)) }
+                detectTapGestures { seekNow((it.x / size.width).coerceIn(0f, 1f)) }
             }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
-                    onDragStart = { current = (it.x / size.width).coerceIn(0f, 1f); onDrag(current) },
+                    onDragStart = { current = (it.x / size.width).coerceIn(0f, 1f); dragNow(current) },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
-                        current = (change.position.x / size.width).coerceIn(0f, 1f); onDrag(current)
+                        current = (change.position.x / size.width).coerceIn(0f, 1f); dragNow(current)
                     },
-                    onDragEnd = { onSeek(current) },
-                    onDragCancel = { onSeek(current) },
+                    onDragEnd = { seekNow(current) },
+                    onDragCancel = { seekNow(current) },
                 )
             }
             .semantics { contentDescription = "Позиция трека" },
