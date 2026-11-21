@@ -73,6 +73,8 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
     private var coverJob: Job? = null
     /** The current session got as far as «hello»; a later loss restarts the backoff. */
     @Volatile private var sessionConnected = false
+    /** The loopback port answered with a foreign certificate: use Wi-Fi until the next restart. */
+    @Volatile private var skipUsb = false
 
     private enum class End { LOST, REVOKED, CERTIFICATE, STOPPED, USB }
 
@@ -145,6 +147,7 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
     /** After a new pairing or when the user leaves the connection screen. */
     fun restart() {
         stop()
+        skipUsb = false
         _state.value = store.load()?.let { ConnectionState.Connecting(it) } ?: ConnectionState.NotPaired
         start()
     }
@@ -161,7 +164,7 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
             if (failures == 0) _state.value = ConnectionState.Connecting(pc)
             sessionConnected = false
             // USB first: with the cable and adb, PulseDeck maps the phone's 127.0.0.1 to the PC.
-            val usb = usbReachable(pc.port)
+            val usb = !skipUsb && usbReachable(pc.port)
             when (connectOnce(pc, token, if (usb) LOOPBACK else pc.host, usb)) {
                 End.REVOKED -> {
                     store.clear()
@@ -170,6 +173,12 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
                     return
                 }
                 End.CERTIFICATE -> {
+                    // Something else answers on the phone's 127.0.0.1 (not PulseDeck through the cable):
+                    // go on over Wi-Fi instead of giving up.
+                    if (usb) {
+                        skipUsb = true
+                        continue
+                    }
                     _state.value = ConnectionState.CertificateChanged(pc)
                     return
                 }
@@ -247,7 +256,7 @@ class PanelConnection(private val store: PairingStore, private val scope: Corout
             }
         })
         // On Wi-Fi, keep checking for the cable: USB is steadier, so switch as soon as it appears.
-        val usbWatch = if (usb) null else scope.launch {
+        val usbWatch = if (usb || skipUsb) null else scope.launch {
             while (isActive && !ended.isCompleted) {
                 delay(USB_CHECK_MS)
                 if (sessionConnected && usbReachable(pc.port)) ended.complete(End.USB)

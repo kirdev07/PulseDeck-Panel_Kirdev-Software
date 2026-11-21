@@ -74,7 +74,11 @@ class Updater(private val context: Context, private val scope: CoroutineScope) {
                 UpdateState.Failed("Не удалось проверить обновления: нет интернета или GitHub недоступен.")
             }
             _state.value = result
-            if (download && result is UpdateState.Available) scope.launch { download(result.release) }
+            // Not scope.launch: on Main it could run while this job is still active and return at once.
+            if (download && result is UpdateState.Available) {
+                job = null
+                download(result.release)
+            }
         }
     }
 
