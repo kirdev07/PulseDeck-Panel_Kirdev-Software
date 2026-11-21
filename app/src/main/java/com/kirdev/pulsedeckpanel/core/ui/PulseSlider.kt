@@ -2,7 +2,6 @@ package com.kirdev.pulsedeckpanel.core.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -57,9 +56,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * The one slider of the app (Material 3 Expressive): a thick track split by an upright handle with
- * small gaps, inner corners 2 dp, a stop dot at the end. The handle thins while held, a bubble shows
- * the value over the finger, outside changes glide. [steps] > 0: snaps with a light tick per step.
+ * The one slider of the app: a thin line and a round dot. The dot grows with a soft halo while held,
+ * a bubble shows the value over the finger, outside changes glide. [steps] > 0: snaps with a light tick per step.
  * [wave]: the played part is a drifting wave while [playing] (Android's media player), flat on pause.
  * [onChange] follows the finger; [onDone] gets the value when it lifts (or on a tap).
  */
@@ -92,7 +90,7 @@ fun PulseSlider(
     val outside by animateFloatAsState(value.coerceIn(0f, 1f), if (motion) tween(260, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)) else tween(0),
         label = "slider")
     val shown = held ?: outside
-    val handleW by animateDpAsState(if (pressed) 2.dp else 4.dp, tween(150), label = "handle")
+    val grip by animateFloatAsState(if (pressed) 1f else 0f, tween(160), label = "grip")
     val waveHeight = remember { Animatable(if (wave && playing) 1f else 0f) }
     LaunchedEffect(wave, playing) {
         waveHeight.animateTo(if (wave && playing) 1f else 0f,
@@ -101,9 +99,8 @@ fun PulseSlider(
     val time = rememberFrameTime(wave && playing && motion)
     val active = if (enabled) Palette.Accent else Palette.Disabled
     val rest = if (enabled) Palette.Track else Palette.Disabled.copy(alpha = 0.12f)
-    val dot = if (enabled) Palette.Accent else Palette.Disabled
     val density = LocalDensity.current
-    val tall = track + 20.dp
+    val tall = 24.dp
 
     Box(
         modifier.fillMaxWidth().height(maxOf(minHeight, tall)).onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
@@ -120,7 +117,7 @@ fun PulseSlider(
                         tryAwaitRelease()
                         pressed = false
                     },
-                    onTap = { doneNow(snap(it.x / size.width)) },
+                    onTap = { doneNow(snap((it.x - 8.dp.toPx()) / (size.width - 16.dp.toPx()))) },
                 )
             }
             .pointerInput(enabled, steps) {
@@ -128,11 +125,11 @@ fun PulseSlider(
                 detectHorizontalDragGestures(
                     onDragStart = {
                         pressed = true
-                        held = snap(it.x / size.width).also { v -> changeNow(v) }
+                        held = snap((it.x - 8.dp.toPx()) / (size.width - 16.dp.toPx())).also { v -> changeNow(v) }
                     },
                     onHorizontalDrag = { change, _ ->
                         change.consume()
-                        val v = snap(change.position.x / size.width)
+                        val v = snap((change.position.x - 8.dp.toPx()) / (size.width - 16.dp.toPx()))
                         if (v != held) {
                             if (steps > 0) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             held = v
@@ -146,12 +143,14 @@ fun PulseSlider(
         contentAlignment = Alignment.CenterStart,
     ) {
         Canvas(Modifier.fillMaxWidth().height(tall)) {
-            if (wave) drawWave(shown, active, rest, dot, track.toPx(), handleW.toPx(), waveHeight.value, time.value)
-            else drawThick(shown, active, rest, dot, track.toPx(), handleW.toPx())
+            val line = (if (track < 10.dp) 3.dp else 4.dp).toPx()
+            val thumb = (if (track < 10.dp) 6.dp else 8.dp).toPx() * (1f + 0.25f * grip)
+            if (wave) drawWaveSlider(shown, active, rest, line, thumb, grip, waveHeight.value, time.value)
+            else drawLineSlider(shown, active, rest, line, thumb, grip)
         }
         val text = bubble?.takeIf { held != null }?.invoke(shown)
         if (text != null) {
-            val x = with(density) { (shown * widthPx).toDp() }
+            val x = with(density) { (8.dp.toPx() + shown * (widthPx - 16.dp.toPx())).toDp() }
             Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Palette.Black,
                 modifier = Modifier.offset { IntOffset((x - 22.dp).roundToPx(), -(tall / 2 + 20.dp).roundToPx()) }
                     .clip(RoundedCornerShape(12.dp)).background(Palette.Text).padding(horizontal = 10.dp, vertical = 5.dp))
@@ -160,55 +159,41 @@ fun PulseSlider(
 }
 
 
-/** Track with a gap on each side of the handle; inner corners small, outer corners round. */
-private fun DrawScope.drawThick(v: Float, active: Color, rest: Color, dot: Color, track: Float, handle: Float) {
-    val gap = 6.dp.toPx()
-    val inner = CornerRadius(2.dp.toPx())
-    val outer = CornerRadius(track / 2)
-    val top = (size.height - track) / 2
-    val x = (size.width - handle) * v
-    val leftEnd = x - gap
-    if (leftEnd > 0f) {
-        drawPath(Path().apply {
-            addRoundRect(RoundRect(0f, top, max(leftEnd, track / 2), top + track, outer, inner, inner, outer))
-        }, active)
-    }
-    val rightStart = x + handle + gap
-    if (rightStart < size.width) {
-        drawPath(Path().apply {
-            addRoundRect(RoundRect(min(rightStart, size.width - track / 2), top, size.width, top + track, inner, outer, outer, inner))
-        }, rest)
-        val r = 2.dp.toPx()
-        if (size.width - rightStart > track) drawCircle(dot, r, Offset(size.width - track / 2, size.height / 2))
-    }
-    drawRoundRect(active, Offset(x, (size.height - (track + 20.dp.toPx())) / 2), Size(handle, track + 20.dp.toPx()),
-        CornerRadius(handle / 2))
+/** A thin line and a round dot; while held the dot grows and gets a soft halo. */
+private fun DrawScope.drawLineSlider(v: Float, active: Color, rest: Color, line: Float, thumb: Float, halo: Float) {
+    val mid = size.height / 2
+    val start = thumb
+    val end = size.width - thumb
+    val x = start + (end - start) * v
+    drawLine(rest, Offset(start, mid), Offset(end, mid), line, StrokeCap.Round)
+    if (x > start) drawLine(active, Offset(start, mid), Offset(x, mid), line, StrokeCap.Round)
+    if (halo > 0f) drawCircle(active.copy(alpha = 0.18f * halo), thumb * (1f + 1.1f * halo), Offset(x, mid))
+    drawCircle(active, thumb, Offset(x, mid))
 }
 
-private const val WAVE_LENGTH = 32f      // dp
-private const val WAVE_HEIGHT = 3f       // dp
-private const val WAVE_SPEED = 10f       // dp per second
+private const val WAVE_LENGTH = 20f      // dp
+private const val WAVE_HEIGHT = 2.2f     // dp
+private const val WAVE_SPEED = 8f        // dp per second
 
-/**
- * The same track as [drawThick] — same thickness, gaps, handle and stop dot — but the played part
- * is a band that waves while the track plays and lies flat on pause (then both look the same).
- */
-private fun DrawScope.drawWave(v: Float, active: Color, rest: Color, dot: Color, track: Float, handle: Float, height: Float, timeMs: Float) {
+/** The same line and dot; the played part waves while the track plays (flat on pause). */
+private fun DrawScope.drawWaveSlider(v: Float, active: Color, rest: Color, line: Float, thumb: Float, halo: Float, height: Float, timeMs: Float) {
     if (height <= 0.01f) {
-        drawThick(v, active, rest, dot, track, handle)
+        drawLineSlider(v, active, rest, line, thumb, halo)
         return
     }
     val dp = density
-    val gap = 6.dp.toPx()
-    val x = (size.width - handle) * v
     val mid = size.height / 2
+    val start = thumb
+    val end = size.width - thumb
+    val x = start + (end - start) * v
     val length = WAVE_LENGTH * dp
     val amp = WAVE_HEIGHT * dp * height
-    val taper = length
-    fun amplitude(px: Float) = amp * max(0f, min(min(1f, (x - gap - px) / taper), (px - track / 2) / (length / 2)))
+    val taper = 1.5f * length
+    fun amplitude(px: Float) = amp * max(0f, min(min(1f, (x - px) / taper * 2f), (px - start) / (length / 2)))
+    drawLine(rest, Offset(x, mid), Offset(end, mid), line, StrokeCap.Round)
     val path = Path()
     val phase = (timeMs / 1000f * WAVE_SPEED) % WAVE_LENGTH
-    var px = track / 2 - phase * dp - length
+    var px = start - phase * dp - length
     var sign = 1f
     var py = sign * amplitude(px)
     path.moveTo(px, mid + py)
@@ -222,22 +207,8 @@ private fun DrawScope.drawWave(v: Float, active: Color, rest: Color, dot: Color,
         px = nx
         py = ny
     }
-    val end = x - gap
-    if (end > track / 2) {
-        clipRect(left = 0f, right = end) {
-            drawPath(path, active, style = Stroke(width = track, cap = StrokeCap.Round))
-        }
-    }
-    // the rest and the handle exactly as on the flat track
-    val inner = CornerRadius(2.dp.toPx())
-    val outer = CornerRadius(track / 2)
-    val top = mid - track / 2
-    val rightStart = x + handle + gap
-    if (rightStart < size.width) {
-        drawPath(Path().apply {
-            addRoundRect(RoundRect(min(rightStart, size.width - track / 2), top, size.width, top + track, inner, outer, outer, inner))
-        }, rest)
-        if (size.width - rightStart > track) drawCircle(dot, 2.dp.toPx(), Offset(size.width - track / 2, mid))
-    }
-    drawRoundRect(active, Offset(x, mid - (track + 20.dp.toPx()) / 2), Size(handle, track + 20.dp.toPx()), CornerRadius(handle / 2))
+    if (x > start) clipRect(left = start - line, right = x) { drawPath(path, active, style = Stroke(width = line, cap = StrokeCap.Round)) }
+    drawCircle(active, line / 2, Offset(start, mid))
+    if (halo > 0f) drawCircle(active.copy(alpha = 0.18f * halo), thumb * (1f + 1.1f * halo), Offset(x, mid))
+    drawCircle(active, thumb, Offset(x, mid))
 }
